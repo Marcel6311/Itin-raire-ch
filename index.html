@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Itinéraire CH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F7F5F0; --paper-raised:#FFFFFF; --ink:#1B2430; --ink-soft:#5B6472;
+    --line:#DEDACE; --coral:#E4572E; --coral-dim:#F4DED4; --lake:#2C6E7F; --lake-dim:#DCEAEC;
+    --leaf:#4C8C4A; --leaf-dim:#E1EEDF; --amber:#C98A1D; --danger:#A31E22; --danger-dim:#F7D6D5;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; background:var(--paper); font-family:'Inter',sans-serif; color:var(--ink);}
+  body{ padding-bottom:env(safe-area-inset-bottom); }
+  .app{ max-width:520px; margin:0 auto; min-height:100vh; position:relative; padding-bottom:96px; }
+
+  .topbar{ padding:calc(env(safe-area-inset-top) + 14px) 20px 6px; }
+  .eyebrow{ font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.12em; color:var(--ink-soft); text-transform:uppercase; margin:0 0 2px; display:flex; align-items:center; gap:6px;}
+  .live-dot{ width:7px; height:7px; border-radius:50%; background:var(--coral); animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.25;} }
+  h1.app-title{ font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; margin:0; letter-spacing:-.01em; }
+
+  .flapboard{ margin:14px 20px 8px; background:var(--ink); border-radius:14px; padding:14px 16px; font-family:'IBM Plex Mono',monospace; }
+  .flap-header{ display:flex; justify-content:space-between; color:#8B93A0; font-size:10px; letter-spacing:.1em; text-transform:uppercase; margin-bottom:6px; }
+  .flap-stopgroup{ display:flex; justify-content:space-between; align-items:center; padding:11px 0 5px; color:#C7CCD4; font-size:11.5px; font-weight:600; }
+  .flap-stopgroup:first-of-type{ padding-top:2px; }
+  .flap-stopgroup .stop-dist{ color:#6F7787; font-weight:500; }
+  .flap-row{ display:flex; align-items:center; gap:9px; padding:7px 0; border-top:1px solid rgba(255,255,255,.08); }
+  .flap-time{ background:#0E1116; color:#F3EFE4; font-weight:600; font-size:14px; padding:4px 6px; border-radius:5px; min-width:48px; text-align:center; flex-shrink:0; }
+  .flap-time.delay{ color:var(--coral); }
+  .flap-mode{ width:24px; height:24px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; }
+  .mode-train{background:var(--coral);} .mode-bus{background:var(--lake);} .mode-boat{background:#3A6EA5;} .mode-tram{background:#7B5EA7;}
+  .flap-dest{ color:#F3EFE4; font-size:12.5px; font-weight:600; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .flap-badge{ font-size:9.5px; padding:2px 6px; border-radius:20px; font-weight:600; flex-shrink:0; }
+  .badge-ontime{ background:rgba(76,140,74,.25); color:#8FD98C; }
+  .badge-delay{ background:rgba(228,87,46,.25); color:#F0967A; }
+  .flap-empty{ color:#8B93A0; font-size:12px; padding:8px 0; }
+  .flap-loading{ color:#8B93A0; font-size:12px; padding:8px 0; font-family:'Inter',sans-serif; }
+
+  .geo-banner{
+    margin:10px 20px; padding:12px 14px; background:var(--lake-dim); border-radius:12px;
+    font-size:12.5px; color:#1B4C57; display:flex; gap:9px; align-items:center; justify-content:space-between;
+  }
+  .geo-banner button{ background:var(--lake); color:#fff; border:none; border-radius:9px; padding:7px 12px; font-size:12px; font-weight:600; font-family:'Inter',sans-serif; flex-shrink:0; }
+  .geo-banner.error{ background:var(--danger-dim); color:#7A2A26; }
+  .geo-banner.error button{ background:var(--danger); }
+
+  .card{ margin:14px 20px; background:var(--paper-raised); border-radius:18px; padding:16px; border:1px solid var(--line); position:relative; }
+  .field{ display:flex; align-items:center; gap:10px; padding:12px 4px; border-bottom:1px solid var(--line); position:relative; }
+  .field:last-of-type{ border-bottom:none; }
+  .field .dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .dot-from{ background:var(--ink); } .dot-to{ background:var(--coral); }
+  .field input{ border:none; outline:none; background:none; font-family:'Inter',sans-serif; font-size:15px; font-weight:500; color:var(--ink); flex:1; padding:0; min-width:0; }
+  .field input::placeholder{ color:var(--ink-soft); font-weight:400; }
+  .geo-btn{ width:30px; height:30px; border-radius:9px; background:var(--lake-dim); color:var(--lake); display:flex; align-items:center; justify-content:center; font-size:14px; border:none; flex-shrink:0; }
+
+  .autocomplete{
+    position:absolute; top:100%; left:0; right:0; background:var(--paper-raised); border:1px solid var(--line);
+    border-radius:12px; margin-top:4px; box-shadow:0 10px 26px rgba(0,0,0,.12); z-index:60; max-height:220px; overflow-y:auto; display:none;
+  }
+  .autocomplete.show{ display:block; }
+  .ac-item{ padding:11px 14px; font-size:14px; border-bottom:1px solid var(--line); cursor:pointer; display:flex; align-items:center; gap:8px; }
+  .ac-item:last-child{ border-bottom:none; }
+  .ac-item:active{ background:var(--paper); }
+  .ac-item .ac-dist{ margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-soft); flex-shrink:0; }
+
+  .btn-primary{ width:100%; background:var(--ink); color:var(--paper); border:none; border-radius:14px; padding:14px; font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:15px; margin-top:10px; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .btn-primary:disabled{ opacity:.5; }
+  .btn-primary span.arrow{ color:var(--coral); }
+  .btn-secondary{ width:100%; background:none; color:var(--ink); border:1px solid var(--line); border-radius:14px; padding:12px; font-family:'Inter',sans-serif; font-weight:600; font-size:14px; }
+
+  .section-label{ font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-soft); margin:20px 20px 10px; }
+
+  .back-row{ display:flex; align-items:center; gap:12px; padding:calc(env(safe-area-inset-top) + 14px) 20px 4px; }
+  .back-btn{ width:34px; height:34px; border-radius:10px; background:var(--paper-raised); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+
+  .trip-card{ margin:0 20px 14px; background:var(--paper-raised); border-radius:16px; border:1px solid var(--line); overflow:hidden; cursor:pointer; }
+  .trip-top{ display:flex; justify-content:space-between; align-items:center; padding:14px 16px 8px; }
+  .trip-duration{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:17px; }
+  .trip-time{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-soft); }
+  .trip-legs{ display:flex; align-items:center; gap:6px; padding:0 16px 14px; flex-wrap:wrap; }
+  .leg-pill{ display:flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; padding:5px 9px; border-radius:9px; color:#fff; }
+  .leg-sep{ color:var(--ink-soft); font-size:11px; }
+  .leg-walk{ color:var(--ink-soft); font-weight:500; font-size:11.5px; }
+
+  .step{ display:flex; gap:12px; margin:0 20px; padding:2px 0 20px; position:relative; }
+  .step::before{ content:''; position:absolute; left:12px; top:26px; bottom:0; width:2px; background:var(--line); }
+  .step:last-child::before{ display:none; }
+  .step-dot{ width:26px; height:26px; border-radius:50%; flex-shrink:0; z-index:2; display:flex; align-items:center; justify-content:center; font-size:12px; color:#fff; }
+  .step-title{ font-weight:600; font-size:14px; }
+  .step-sub{ font-size:12.5px; color:var(--ink-soft); margin-top:2px; }
+  .step-time{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft); margin-top:3px; }
+
+  .divider-note{ margin:6px 20px 18px; padding:10px 12px; background:var(--lake-dim); border-radius:10px; font-size:12px; color:#1B4C57; display:flex; gap:8px; align-items:flex-start; }
+
+  .maps-cta{ margin:0 20px 20px; background:none; border:1px dashed var(--ink-soft); color:var(--ink-soft); border-radius:12px; padding:11px; font-family:'Inter',sans-serif; font-size:12.5px; text-align:center; }
+
+  .bottom-nav{ position:fixed; bottom:0; left:0; right:0; max-width:520px; margin:0 auto; background:rgba(247,245,240,.94); backdrop-filter:blur(10px); border-top:1px solid var(--line); display:flex; padding:10px 10px calc(env(safe-area-inset-bottom) + 10px); }
+  .nav-item{ flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; font-family:'Inter',sans-serif; font-size:10.5px; font-weight:600; color:var(--ink-soft); background:none; border:none; padding:6px 0; }
+  .nav-item .ic{ font-size:19px; }
+  .nav-item.active{ color:var(--coral); }
+
+  .screen{ display:none; }
+  .screen.active{ display:block; }
+
+  .spinner{ width:16px; height:16px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  .toast{ position:fixed; bottom:100px; left:20px; right:20px; max-width:480px; margin:0 auto; background:var(--ink); color:#fff; padding:12px 16px; border-radius:12px; font-size:13px; text-align:center; opacity:0; transform:translateY(10px); transition:.3s; pointer-events:none; z-index:200; }
+  .toast.show{ opacity:1; transform:translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ============ ÉCRAN ACCUEIL ============ -->
+  <div class="screen active" id="screen-home">
+    <div class="topbar">
+      <p class="eyebrow" id="geo-label"><span class="live-dot"></span>Localisation…</p>
+      <h1 class="app-title">Départs près de vous</h1>
+    </div>
+
+    <div id="geo-banner-slot"></div>
+
+    <div class="flapboard" id="flapboard">
+      <div class="flap-header"><span>Arrêts à proximité</span><span>Temps réel</span></div>
+      <div class="flap-loading">En attente de votre position…</div>
+    </div>
+
+    <div class="card">
+      <div class="field">
+        <div class="dot dot-from"></div>
+        <input type="text" id="input-from" placeholder="Point de départ" value="Ma position actuelle">
+        <button class="geo-btn" onclick="useCurrentLocation()">◎</button>
+      </div>
+      <div class="field">
+        <div class="dot dot-to"></div>
+        <input type="text" id="input-to" placeholder="Destination — rue, arrêt, lieu…" autocomplete="off">
+        <div class="autocomplete" id="autocomplete-to"></div>
+      </div>
+      <button class="btn-primary" id="btn-search" onclick="searchTrips()">Voir les trajets <span class="arrow">→</span></button>
+    </div>
+  </div>
+
+  <!-- ============ ÉCRAN RÉSULTATS ============ -->
+  <div class="screen" id="screen-results">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('home')">←</button>
+      <div style="min-width:0;">
+        <p class="eyebrow" id="results-route" style="margin:0;">—</p>
+        <h1 class="app-title" style="font-size:19px;" id="results-title">Recherche…</h1>
+      </div>
+    </div>
+    <div id="results-list" style="padding-top:8px;"></div>
+  </div>
+
+  <!-- ============ ÉCRAN DÉTAIL TRAJET ============ -->
+  <div class="screen" id="screen-detail">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('results')">←</button>
+      <div>
+        <p class="eyebrow" id="detail-arrival" style="margin:0;">—</p>
+        <h1 class="app-title" style="font-size:19px;" id="detail-duration">—</h1>
+      </div>
+    </div>
+    <div class="divider-note">
+      ⓘ Horaires en temps réel CFF/TL. En cas de perturbation signalée par l'opérateur, le retard apparaît directement sur les étapes ci-dessous.
+    </div>
+    <div id="detail-steps"></div>
+    <button class="maps-cta" id="maps-cta-btn">🗺️ Ouvrir dans Google Maps (à activer avec ta clé API)</button>
+  </div>
+
+  <div class="bottom-nav">
+    <button class="nav-item active" data-nav="home" onclick="showScreen('home')"><span class="ic">🧭</span>Trajet</button>
+    <button class="nav-item" data-nav="around"><span class="ic">🗺️</span>Autour</button>
+    <button class="nav-item" data-nav="favoris"><span class="ic">☆</span>Favoris</button>
+    <button class="nav-item" data-nav="reglages"><span class="ic">⚙︎</span>Réglages</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'https://transport.opendata.ch/v1';
+let userCoords = null;      // {lat, lon}
+let nearbyStations = [];    // list from /locations
+let selectedDestination = null; // {id, name, coordinate}
+let currentConnections = [];
+
+// ---------- Utilitaires ----------
+function showToast(msg, ms){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=> t.classList.remove('show'), ms || 3000);
+}
+
+function showScreen(name){
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const map = {home:'home', results:'home', detail:'home'};
+  const btn = document.querySelector('[data-nav="'+(map[name]||name)+'"]');
+  if(btn) btn.classList.add('active');
+  window.scrollTo(0,0);
+}
+
+// Distance à vol d'oiseau (Haversine) — utilisée uniquement pour estimer un temps de marche indicatif
+function haversineMeters(lat1, lon1, lat2, lon2){
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function walkMinutes(meters){ return Math.max(1, Math.round(meters / 80)); } // ~4.8 km/h
+
+function iconForCategory(cat){
+  if(!cat) return {icon:'🚌', cls:'mode-bus'};
+  const c = cat.toUpperCase();
+  if(['IC','IR','RE','R','EC','TGV','ICE','S','SN','EXT'].includes(c)) return {icon:'🚆', cls:'mode-train'};
+  if(['T','TRAM'].includes(c)) return {icon:'🚊', cls:'mode-tram'};
+  if(['BAT','SHIP','SCH'].includes(c)) return {icon:'⛴', cls:'mode-boat'};
+  return {icon:'🚌', cls:'mode-bus'};
+}
+
+function fmtTime(iso){
+  if(!iso) return '--:--';
+  const d = new Date(iso);
+  return d.toLocaleTimeString('fr-CH', {hour:'2-digit', minute:'2-digit'});
+}
+
+function computeDelayMin(stop){
+  // stop.delay est en minutes si dispo (objet 'stop' des connexions/stationboard)
+  if(stop && typeof stop.delay === 'number') return stop.delay;
+  return 0;
+}
+
+// ---------- Géolocalisation + tableau des départs ----------
+function initGeolocation(){
+  if(!('geolocation' in navigator)){
+    renderGeoError("La géolocalisation n'est pas disponible sur cet appareil.");
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      userCoords = {lat: pos.coords.latitude, lon: pos.coords.longitude};
+      document.getElementById('geo-label').innerHTML = '<span class="live-dot"></span>Position détectée';
+      document.getElementById('geo-banner-slot').innerHTML = '';
+      loadNearbyDepartures();
+    },
+    err => {
+      let msg = "Impossible d'obtenir votre position.";
+      if(err.code === err.PERMISSION_DENIED) msg = "Localisation refusée — autorisez-la dans les réglages Safari pour voir vos départs.";
+      renderGeoError(msg);
+    },
+    { enableHighAccuracy:true, timeout:10000 }
+  );
+}
+
+function renderGeoError(msg){
+  document.getElementById('geo-label').innerHTML = '📍 Position indisponible';
+  document.getElementById('geo-banner-slot').innerHTML =
+    '<div class="geo-banner error"><span>' + msg + '</span><button onclick="initGeolocation()">Réessayer</button></div>';
+  document.getElementById('flapboard').innerHTML =
+    '<div class="flap-header"><span>Arrêts à proximité</span><span>—</span></div>' +
+    '<div class="flap-empty">Activez la localisation pour voir les départs autour de vous.</div>';
+}
+
+async function loadNearbyDepartures(){
+  const board = document.getElementById('flapboard');
+  board.innerHTML = '<div class="flap-header"><span>Arrêts à proximité</span><span>Temps réel</span></div><div class="flap-loading">Recherche des arrêts proches…</div>';
+  try{
+    const res = await fetch(`${API}/locations?x=${userCoords.lat}&y=${userCoords.lon}&type=station`);
+    const data = await res.json();
+    nearbyStations = (data.stations || []).filter(s => s.id).slice(0, 2);
+    if(nearbyStations.length === 0){
+      board.innerHTML = '<div class="flap-header"><span>Arrêts à proximité</span><span>—</span></div><div class="flap-empty">Aucun arrêt trouvé à proximité.</div>';
+      return;
+    }
+    const groupsHtml = await Promise.all(nearbyStations.map(renderStationGroup));
+    board.innerHTML = '<div class="flap-header"><span>' + nearbyStations.length + ' arrêt(s) à proximité</span><span>Temps réel</span></div>' + groupsHtml.join('');
+  } catch(e){
+    board.innerHTML = '<div class="flap-header"><span>Arrêts à proximité</span><span>—</span></div><div class="flap-empty">Erreur réseau — tirez pour rafraîchir.</div>';
+  }
+}
+
+async function renderStationGroup(station){
+  const dist = station.distance ? Math.round(station.distance) + ' m · ' + walkMinutes(station.distance) + "′" : '';
+  let rowsHtml = '<div class="flap-empty">Aucun départ imminent.</div>';
+  try{
+    const res = await fetch(`${API}/stationboard?id=${station.id}&limit=4`);
+    const data = await res.json();
+    const rows = (data.stationboard || []).map(j => {
+      const mode = iconForCategory(j.category);
+      const delay = computeDelayMin(j.stop);
+      const timeCls = delay > 0 ? 'flap-time delay' : 'flap-time';
+      const badge = delay > 0 ? `<span class="flap-badge badge-delay">+${delay} min</span>` : `<span class="flap-badge badge-ontime">à l'heure</span>`;
+      const t = fmtTime(j.stop.departure);
+      const line = (j.category || '') + (j.number ? ' ' + j.number : '');
+      return `<div class="flap-row">
+        <span class="${timeCls}">${t}</span>
+        <div class="flap-mode ${mode.cls}">${mode.icon}</div>
+        <span class="flap-dest">${j.to || ''}</span>
+        ${badge}
+      </div>`;
+    });
+    if(rows.length) rowsHtml = rows.join('');
+  } catch(e){ rowsHtml = '<div class="flap-empty">Erreur de chargement.</div>'; }
+
+  return `<div class="flap-stopgroup"><span>🚏 ${station.name}</span><span class="stop-dist">${dist}</span></div>${rowsHtml}`;
+}
+
+function useCurrentLocation(){
+  document.getElementById('input-from').value = 'Ma position actuelle';
+  showToast('Départ réglé sur votre position actuelle');
+}
+
+// ---------- Autocomplétion destination ----------
+let acTimer = null;
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('input-to');
+  input.addEventListener('input', () => {
+    clearTimeout(acTimer);
+    const q = input.value.trim();
+    selectedDestination = null;
+    if(q.length < 2){ hideAutocomplete(); return; }
+    acTimer = setTimeout(() => fetchAutocomplete(q), 300);
+  });
+  input.addEventListener('blur', () => setTimeout(hideAutocomplete, 200));
+  initGeolocation();
+});
+
+async function fetchAutocomplete(q){
+  const box = document.getElementById('autocomplete-to');
+  try{
+    const res = await fetch(`${API}/locations?query=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    const items = (data.stations || []).filter(s => s.id).slice(0, 6);
+    if(items.length === 0){ hideAutocomplete(); return; }
+    box.innerHTML = items.map(s => {
+      const distTxt = (userCoords && s.coordinate) ? Math.round(haversineMeters(userCoords.lat, userCoords.lon, s.coordinate.x, s.coordinate.y)) + ' m' : '';
+      return `<div class="ac-item" data-id="${s.id}" data-name="${s.name.replace(/"/g,'&quot;')}">
+        <span>${s.type === 'address' ? '📍' : '🚏'} ${s.name}</span>
+        <span class="ac-dist">${distTxt}</span>
+      </div>`;
+    }).join('');
+    box.querySelectorAll('.ac-item').forEach(el => {
+      el.addEventListener('mousedown', () => {
+        selectedDestination = { id: el.dataset.id, name: el.dataset.name };
+        document.getElementById('input-to').value = el.dataset.name;
+        hideAutocomplete();
+      });
+    });
+    box.classList.add('show');
+  } catch(e){ hideAutocomplete(); }
+}
+function hideAutocomplete(){ document.getElementById('autocomplete-to').classList.remove('show'); }
+
+// ---------- Recherche de trajets ----------
+async function searchTrips(){
+  if(nearbyStations.length === 0){
+    showToast("On n'a pas encore votre arrêt de départ — vérifiez la localisation.");
+    return;
+  }
+  const destInput = document.getElementById('input-to').value.trim();
+  if(!destInput){ showToast('Indiquez une destination.'); return; }
+
+  const btn = document.getElementById('btn-search');
+  btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>';
+
+  const fromStation = nearbyStations[0];
+  const toParam = selectedDestination ? selectedDestination.id : destInput;
+
+  showScreen('results');
+  document.getElementById('results-route').textContent = fromStation.name + ' → ' + destInput;
+  document.getElementById('results-title').textContent = 'Recherche des trajets…';
+  document.getElementById('results-list').innerHTML = '<div class="flap-loading" style="padding:0 20px;">Interrogation des horaires CFF/TL en temps réel…</div>';
+
+  try{
+    const res = await fetch(`${API}/connections?from=${encodeURIComponent(fromStation.id)}&to=${encodeURIComponent(toParam)}&limit=4`);
+    const data = await res.json();
+    currentConnections = data.connections || [];
+    btn.disabled = false; btn.innerHTML = 'Voir les trajets <span class="arrow">→</span>';
+
+    if(currentConnections.length === 0){
+      document.getElementById('results-title').textContent = 'Aucun trajet trouvé';
+      document.getElementById('results-list').innerHTML = '<div class="flap-empty" style="padding:0 20px;">Vérifiez le nom de la destination, ou réessayez avec un arrêt précis.</div>';
+      return;
+    }
+    document.getElementById('results-title').textContent = currentConnections.length + ' trajets trouvés';
+    renderResults(fromStation);
+  } catch(e){
+    btn.disabled = false; btn.innerHTML = 'Voir les trajets <span class="arrow">→</span>';
+    document.getElementById('results-title').textContent = 'Erreur réseau';
+    document.getElementById('results-list').innerHTML = '<div class="flap-empty" style="padding:0 20px;">Impossible de contacter le service horaires. Réessayez.</div>';
+  }
+}
+
+function renderResults(fromStation){
+  const list = document.getElementById('results-list');
+  const walkToStationMin = fromStation.distance ? walkMinutes(fromStation.distance) : null;
+
+  list.innerHTML = currentConnections.map((c, idx) => {
+    const dep = fmtTime(c.from.departure);
+    const arr = fmtTime(c.to.arrival);
+    const [h,m,s] = (c.duration || '00d00:00:00').split(/[d:]/).slice(-3);
+    const durParts = c.duration.match(/(\d+)d(\d+):(\d+)/);
+    let durTxt = '';
+    if(durParts){
+      const totalMin = parseInt(durParts[1])*24*60 + parseInt(durParts[2])*60 + parseInt(durParts[3]);
+      durTxt = totalMin >= 60 ? Math.floor(totalMin/60) + ' h ' + (totalMin%60) + ' min' : totalMin + ' min';
+    }
+    const legs = (c.sections || []).filter(s => s.journey).map(s => {
+      const mode = iconForCategory(s.journey.category);
+      return `<span class="leg-pill" style="background:${mode.cls === 'mode-train' ? 'var(--coral)' : mode.cls === 'mode-boat' ? '#3A6EA5' : mode.cls === 'mode-tram' ? '#7B5EA7' : 'var(--lake)'}">${mode.icon} ${s.journey.category}${s.journey.number ? ' '+s.journey.number : ''}</span>`;
+    });
+    const legsHtml = [];
+    if(walkToStationMin) legsHtml.push(`<span class="leg-walk">🚶 ${walkToStationMin}′</span><span class="leg-sep">›</span>`);
+    legs.forEach((l,i) => { legsHtml.push(l); if(i < legs.length-1) legsHtml.push('<span class="leg-sep">›</span>'); });
+
+    return `<div class="trip-card" onclick="showTripDetail(${idx})">
+      <div class="trip-top">
+        <div>
+          <div class="trip-duration">${durTxt}</div>
+          <div class="trip-time">${dep} → ${arr}</div>
+        </div>
+      </div>
+      <div class="trip-legs">${legsHtml.join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+function showTripDetail(idx){
+  const c = currentConnections[idx];
+  showScreen('detail');
+  document.getElementById('detail-arrival').textContent = 'Arrivée ' + fmtTime(c.to.arrival);
+  const durParts = c.duration.match(/(\d+)d(\d+):(\d+)/);
+  let durTxt = '';
+  if(durParts){
+    const totalMin = parseInt(durParts[1])*24*60 + parseInt(durParts[2])*60 + parseInt(durParts[3]);
+    durTxt = totalMin >= 60 ? Math.floor(totalMin/60) + ' h ' + (totalMin%60) + ' min' : totalMin + ' min';
+  }
+  document.getElementById('detail-duration').textContent = durTxt;
+
+  const steps = [];
+  const fromStation = nearbyStations[0];
+  if(fromStation && fromStation.distance){
+    steps.push(`<div class="step">
+      <div class="step-dot" style="background:var(--ink);">◎</div>
+      <div><div class="step-title">Votre position</div>
+      <div class="step-sub">Marchez jusqu'à ${fromStation.name} (estimation à vol d'oiseau)</div>
+      <div class="step-time">${walkMinutes(fromStation.distance)} min à pied · ≈ ${Math.round(fromStation.distance)} m</div></div>
+    </div>`);
+  }
+
+  (c.sections || []).forEach(sec => {
+    if(sec.journey){
+      const mode = iconForCategory(sec.journey.category);
+      const delay = computeDelayMin(sec.departure);
+      const platform = sec.departure.platform ? 'quai ' + sec.departure.platform : '';
+      steps.push(`<div class="step">
+        <div class="step-dot ${mode.cls}">${mode.icon}</div>
+        <div><div class="step-title">${sec.journey.category}${sec.journey.number ? ' '+sec.journey.number : ''} — direction ${sec.journey.to || ''}</div>
+        <div class="step-sub">${platform}${delay>0 ? ' · retard signalé +'+delay+' min' : ''}</div>
+        <div class="step-time">${fmtTime(sec.departure.departure)} → ${fmtTime(sec.arrival.arrival)}</div></div>
+      </div>`);
+    }
+  });
+
+  steps.push(`<div class="step">
+    <div class="step-dot" style="background:var(--coral);">📍</div>
+    <div><div class="step-title">${c.to.station.name}</div>
+    <div class="step-sub">Arrêt d'arrivée le plus proche de votre destination</div></div>
+  </div>`);
+
+  document.getElementById('detail-steps').innerHTML = steps.join('');
+  document.getElementById('maps-cta-btn').onclick = () => {
+    showToast("La carte Google Maps sera activée une fois ta clé API configurée.");
+  };
+}
+</script>
+
+</body>
+</html>
