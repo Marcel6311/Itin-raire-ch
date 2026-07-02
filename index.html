@@ -36,6 +36,7 @@
   .flap-mode{ width:24px; height:24px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; }
   .mode-train{background:var(--coral);} .mode-bus{background:var(--lake);} .mode-boat{background:#3A6EA5;} .mode-tram{background:#7B5EA7;}
   .flap-dest{ color:#F3EFE4; font-size:12.5px; font-weight:600; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .flap-line{ color:#F3EFE4; font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:600; background:rgba(255,255,255,.1); padding:2px 7px; border-radius:6px; flex-shrink:0; }
   .flap-badge{ font-size:9.5px; padding:2px 6px; border-radius:20px; font-weight:600; flex-shrink:0; }
   .badge-ontime{ background:rgba(76,140,74,.25); color:#8FD98C; }
   .badge-delay{ background:rgba(228,87,46,.25); color:#F0967A; }
@@ -136,8 +137,9 @@
     <div class="card">
       <div class="field">
         <div class="dot dot-from"></div>
-        <input type="text" id="input-from" placeholder="Point de départ" value="Ma position actuelle">
+        <input type="text" id="input-from" placeholder="Point de départ" value="Ma position actuelle" autocomplete="off">
         <button class="geo-btn" onclick="useCurrentLocation()">◎</button>
+        <div class="autocomplete" id="autocomplete-from"></div>
       </div>
       <div class="field">
         <div class="dot dot-to"></div>
@@ -191,7 +193,9 @@ const API = 'https://transport.opendata.ch/v1';
 let userCoords = null;      // {lat, lon}
 let nearbyStations = [];    // list from /locations
 let selectedDestination = null; // {id, name, coordinate}
+let selectedOrigin = null;      // {id, name} — si l'utilisateur choisit un départ précis, sinon on garde l'arrêt géolocalisé
 let currentConnections = [];
+let lastFromLabel = '', lastFromDistanceMeters = null; // mémorise le départ réellement utilisé lors de la recherche
 
 // ---------- Utilitaires ----------
 function showToast(msg, ms){
@@ -305,10 +309,11 @@ async function renderStationGroup(station){
       const timeCls = delay > 0 ? 'flap-time delay' : 'flap-time';
       const badge = delay > 0 ? `<span class="flap-badge badge-delay">+${delay} min</span>` : `<span class="flap-badge badge-ontime">à l'heure</span>`;
       const t = fmtTime(j.stop.departure);
-      const line = (j.category || '') + (j.number ? ' ' + j.number : '');
+      const lineNum = j.number || j.category || '';
       return `<div class="flap-row">
         <span class="${timeCls}">${t}</span>
         <div class="flap-mode ${mode.cls}">${mode.icon}</div>
+        <span class="flap-line">${lineNum}</span>
         <span class="flap-dest">${j.to || ''}</span>
         ${badge}
       </div>`;
@@ -320,32 +325,38 @@ async function renderStationGroup(station){
 }
 
 function useCurrentLocation(){
+  selectedOrigin = null;
   document.getElementById('input-from').value = 'Ma position actuelle';
   showToast('Départ réglé sur votre position actuelle');
 }
 
-// ---------- Autocomplétion destination ----------
-let acTimer = null;
+// ---------- Autocomplétion (départ + destination) ----------
 document.addEventListener('DOMContentLoaded', () => {
-  const input = document.getElementById('input-to');
-  input.addEventListener('input', () => {
-    clearTimeout(acTimer);
-    const q = input.value.trim();
-    selectedDestination = null;
-    if(q.length < 2){ hideAutocomplete(); return; }
-    acTimer = setTimeout(() => fetchAutocomplete(q), 300);
-  });
-  input.addEventListener('blur', () => setTimeout(hideAutocomplete, 200));
+  setupAutocomplete('input-from', 'autocomplete-from', 'origin');
+  setupAutocomplete('input-to', 'autocomplete-to', 'destination');
   initGeolocation();
 });
 
-async function fetchAutocomplete(q){
-  const box = document.getElementById('autocomplete-to');
+function setupAutocomplete(inputId, boxId, kind){
+  const input = document.getElementById(inputId);
+  let timer = null;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if(kind === 'origin') selectedOrigin = null; else selectedDestination = null;
+    if(q.length < 2){ document.getElementById(boxId).classList.remove('show'); return; }
+    timer = setTimeout(() => fetchAutocomplete(q, boxId, inputId, kind), 300);
+  });
+  input.addEventListener('blur', () => setTimeout(() => document.getElementById(boxId).classList.remove('show'), 200));
+}
+
+async function fetchAutocomplete(q, boxId, inputId, kind){
+  const box = document.getElementById(boxId);
   try{
     const res = await fetch(`${API}/locations?query=${encodeURIComponent(q)}`);
     const data = await res.json();
     const items = (data.stations || []).filter(s => s.id).slice(0, 6);
-    if(items.length === 0){ hideAutocomplete(); return; }
+    if(items.length === 0){ box.classList.remove('show'); return; }
     box.innerHTML = items.map(s => {
       const distTxt = (userCoords && s.coordinate) ? Math.round(haversineMeters(userCoords.lat, userCoords.lon, s.coordinate.x, s.coordinate.y)) + ' m' : '';
       return `<div class="ac-item" data-id="${s.id}" data-name="${s.name.replace(/"/g,'&quot;')}">
@@ -355,49 +366,61 @@ async function fetchAutocomplete(q){
     }).join('');
     box.querySelectorAll('.ac-item').forEach(el => {
       el.addEventListener('mousedown', () => {
-        selectedDestination = { id: el.dataset.id, name: el.dataset.name };
-        document.getElementById('input-to').value = el.dataset.name;
-        hideAutocomplete();
+        const chosen = { id: el.dataset.id, name: el.dataset.name };
+        if(kind === 'origin') selectedOrigin = chosen; else selectedDestination = chosen;
+        document.getElementById(inputId).value = el.dataset.name;
+        box.classList.remove('show');
       });
     });
     box.classList.add('show');
-  } catch(e){ hideAutocomplete(); }
+  } catch(e){ box.classList.remove('show'); }
 }
-function hideAutocomplete(){ document.getElementById('autocomplete-to').classList.remove('show'); }
 
 // ---------- Recherche de trajets ----------
 async function searchTrips(){
-  if(nearbyStations.length === 0){
-    showToast("On n'a pas encore votre arrêt de départ — vérifiez la localisation.");
-    return;
-  }
   const destInput = document.getElementById('input-to').value.trim();
   if(!destInput){ showToast('Indiquez une destination.'); return; }
+
+  // Départ : priorité à une station précise choisie via l'autocomplétion.
+  // Sinon, on retombe sur l'arrêt géolocalisé le plus proche.
+  let fromId, fromLabel, fromDistanceMeters = null;
+  if(selectedOrigin){
+    fromId = selectedOrigin.id;
+    fromLabel = selectedOrigin.name;
+  } else if(nearbyStations.length > 0){
+    fromId = nearbyStations[0].id;
+    fromLabel = nearbyStations[0].name;
+    fromDistanceMeters = nearbyStations[0].distance || null;
+  } else {
+    showToast("Indiquez un point de départ précis, ou activez la localisation.");
+    return;
+  }
 
   const btn = document.getElementById('btn-search');
   btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>';
 
-  const fromStation = nearbyStations[0];
   const toParam = selectedDestination ? selectedDestination.id : destInput;
+  lastFromLabel = fromLabel;
+  lastFromDistanceMeters = fromDistanceMeters;
 
   showScreen('results');
-  document.getElementById('results-route').textContent = fromStation.name + ' → ' + destInput;
+  document.getElementById('results-route').textContent = fromLabel + ' → ' + destInput;
   document.getElementById('results-title').textContent = 'Recherche des trajets…';
   document.getElementById('results-list').innerHTML = '<div class="flap-loading" style="padding:0 20px;">Interrogation des horaires CFF/TL en temps réel…</div>';
 
   try{
-    const res = await fetch(`${API}/connections?from=${encodeURIComponent(fromStation.id)}&to=${encodeURIComponent(toParam)}&limit=4`);
+    const res = await fetch(`${API}/connections?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toParam)}&limit=4`);
     const data = await res.json();
     currentConnections = data.connections || [];
     btn.disabled = false; btn.innerHTML = 'Voir les trajets <span class="arrow">→</span>';
 
     if(currentConnections.length === 0){
       document.getElementById('results-title').textContent = 'Aucun trajet trouvé';
-      document.getElementById('results-list').innerHTML = '<div class="flap-empty" style="padding:0 20px;">Vérifiez le nom de la destination, ou réessayez avec un arrêt précis.</div>';
+      document.getElementById('results-list').innerHTML = '<div class="flap-empty" style="padding:0 20px;">Vérifiez le nom du départ et de la destination (essayez un nom d\'arrêt précis via la liste proposée).</div>';
       return;
     }
     document.getElementById('results-title').textContent = currentConnections.length + ' trajets trouvés';
-    renderResults(fromStation);
+    renderResults(fromLabel, fromDistanceMeters);
   } catch(e){
     btn.disabled = false; btn.innerHTML = 'Voir les trajets <span class="arrow">→</span>';
     document.getElementById('results-title').textContent = 'Erreur réseau';
@@ -405,9 +428,9 @@ async function searchTrips(){
   }
 }
 
-function renderResults(fromStation){
+function renderResults(fromLabel, fromDistanceMeters){
   const list = document.getElementById('results-list');
-  const walkToStationMin = fromStation.distance ? walkMinutes(fromStation.distance) : null;
+  const walkToStationMin = fromDistanceMeters ? walkMinutes(fromDistanceMeters) : null;
 
   list.innerHTML = currentConnections.map((c, idx) => {
     const dep = fmtTime(c.from.departure);
@@ -452,13 +475,18 @@ function showTripDetail(idx){
   document.getElementById('detail-duration').textContent = durTxt;
 
   const steps = [];
-  const fromStation = nearbyStations[0];
-  if(fromStation && fromStation.distance){
+  if(lastFromDistanceMeters){
     steps.push(`<div class="step">
       <div class="step-dot" style="background:var(--ink);">◎</div>
       <div><div class="step-title">Votre position</div>
-      <div class="step-sub">Marchez jusqu'à ${fromStation.name} (estimation à vol d'oiseau)</div>
-      <div class="step-time">${walkMinutes(fromStation.distance)} min à pied · ≈ ${Math.round(fromStation.distance)} m</div></div>
+      <div class="step-sub">Marchez jusqu'à ${lastFromLabel} (estimation à vol d'oiseau)</div>
+      <div class="step-time">${walkMinutes(lastFromDistanceMeters)} min à pied · ≈ ${Math.round(lastFromDistanceMeters)} m</div></div>
+    </div>`);
+  } else if(lastFromLabel){
+    steps.push(`<div class="step">
+      <div class="step-dot" style="background:var(--ink);">◎</div>
+      <div><div class="step-title">${lastFromLabel}</div>
+      <div class="step-sub">Point de départ choisi</div></div>
     </div>`);
   }
 
