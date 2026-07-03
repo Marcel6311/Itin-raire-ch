@@ -226,6 +226,7 @@
     <div id="detail-steps"></div>
     <button class="maps-cta" id="maps-cta-btn">🗺️ Ouvrir l'itinéraire à pied dans Maps</button>
     <button class="maps-cta" id="restos-cta-btn" onclick="showScreen('around')" style="border-style:solid; background:var(--coral-dim); color:#9A3D22; font-weight:600;">🍽️ Voir les restaurants à la destination</button>
+    <button class="maps-cta" id="calendar-cta-btn" style="border-style:solid; background:var(--lake-dim); color:#1B4C57; font-weight:600;">📅 Ajouter ce trajet au calendrier (alertes 5 min)</button>
   </div>
 
   <div class="screen" id="screen-around">
@@ -897,12 +898,14 @@ async function openPlaceDetail(placeId){
       ${p.formattedAddress ? `<div class="meta-txt" style="margin-bottom:6px;">📍 ${p.formattedAddress}</div>` : ''}
       ${p.nationalPhoneNumber ? `<div class="meta-txt" style="margin-bottom:6px;">📞 ${p.nationalPhoneNumber}</div>` : ''}
       ${hoursHtml ? `<div class="section-label" style="margin:14px 0 6px;">Horaires</div>${hoursHtml}` : ''}
-      <div style="display:flex; gap:8px; margin-top:16px;">
+      <button class="btn-primary" id="save-contact-btn" style="margin-top:16px;">💾 Enregistrer dans les contacts</button>
+      <div style="display:flex; gap:8px; margin-top:10px;">
         ${p.websiteUri ? `<a href="${p.websiteUri}" target="_blank" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">🌐 Site / Menu</a>` : ''}
         ${p.googleMapsUri ? `<a href="${p.googleMapsUri}" target="_blank" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">📍 Fiche Google</a>` : ''}
       </div>
       <p class="meta-txt" style="margin-top:14px; line-height:1.4;">ⓘ Le menu détaillé n'est pas fourni par l'API Google — le lien "Fiche Google" affiche souvent les photos de menu ajoutées par l'établissement ou les visiteurs.</p>
     `;
+    document.getElementById('save-contact-btn').onclick = () => saveContactFromPlace(p);
   } catch(e){
     body.innerHTML = `<div class="flap-empty" style="padding:20px;">Impossible de charger la fiche : ${e.message || e}</div>`;
   }
@@ -910,6 +913,94 @@ async function openPlaceDetail(placeId){
 
 function closePlaceDetail(){
   document.getElementById('place-detail-modal').classList.remove('show');
+}
+
+// ---------- Export vers Contacts (vCard) et Calendrier (iCalendar) ----------
+function icsDate(dateStr){
+  const d = new Date(dateStr);
+  return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+}
+
+function downloadBlob(content, mimeType, filename){
+  const blob = new Blob([content], { type: mimeType + ';charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+// Génère et propose une fiche contact (.vcf) pour le restaurant actuellement affiché
+function saveContactFromPlace(p){
+  const lines = [
+    'BEGIN:VCARD',
+    'VERSION:3.0',
+    `FN:${p.displayName ? p.displayName.text : 'Restaurant'}`,
+    p.formattedAddress ? `ADR;TYPE=WORK:;;${p.formattedAddress.replace(/,/g, '\\,')};;;;` : '',
+    p.nationalPhoneNumber ? `TEL;TYPE=WORK,VOICE:${p.nationalPhoneNumber}` : '',
+    p.websiteUri ? `URL:${p.websiteUri}` : '',
+    'END:VCARD'
+  ].filter(Boolean);
+  downloadBlob(lines.join('\r\n'), 'text/vcard', (p.displayName ? p.displayName.text : 'restaurant') + '.vcf');
+}
+
+// Génère un événement par étape du trajet, chacun avec une alarme 5 min avant l'arrivée à cette étape
+function saveTripToCalendar(c){
+  const journeySections = (c.sections || []).filter(sec => sec.journey);
+  if(journeySections.length === 0){ showToast("Aucune étape à exporter pour ce trajet."); return; }
+
+  let events = '';
+  journeySections.forEach((sec, i) => {
+    const isLast = i === journeySections.length - 1;
+    const alightLabel = isLast ? 'Terminus' : `Descendre à ${sec.arrival.station.name}`;
+    const summary = `${sec.journey.category}${sec.journey.number ? ' ' + sec.journey.number : ''} → ${alightLabel}`;
+    events += [
+      'BEGIN:VEVENT',
+      `UID:${Date.now()}-${i}@itineraire-ch.github.io`,
+      `DTSTAMP:${icsDate(new Date().toISOString())}`,
+      `DTSTART:${icsDate(sec.departure.departure)}`,
+      `DTEND:${icsDate(sec.arrival.arrival)}`,
+      `SUMMARY:${summary}`,
+      `DESCRIPTION:Direction ${sec.journey.to || ''}`,
+      'BEGIN:VALARM',
+      'TRIGGER:-PT5M',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:${alightLabel} dans 5 minutes`,
+      'END:VALARM',
+      'END:VEVENT',
+      ''
+    ].join('\r\n');
+  });
+
+  // Étape finale à pied jusqu'à l'adresse exacte, si elle a été résolue (avec sa propre alarme)
+  if(selectedPlaceWalk){
+    const lastArrival = journeySections[journeySections.length - 1].arrival.arrival;
+    const walkMin = walkMinutes(selectedPlaceWalk.stops[0].distance);
+    const walkEnd = new Date(new Date(lastArrival).getTime() + walkMin * 60000).toISOString();
+    events += [
+      'BEGIN:VEVENT',
+      `UID:${Date.now()}-final@itineraire-ch.github.io`,
+      `DTSTAMP:${icsDate(new Date().toISOString())}`,
+      `DTSTART:${icsDate(lastArrival)}`,
+      `DTEND:${icsDate(walkEnd)}`,
+      `SUMMARY:🚶 Marche jusqu'à ${selectedPlaceWalk.placeName}`,
+      'BEGIN:VALARM',
+      'TRIGGER:-PT5M',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:Arrivée à ${selectedPlaceWalk.placeName} dans 5 minutes`,
+      'END:VALARM',
+      'END:VEVENT',
+      ''
+    ].join('\r\n');
+  }
+
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//itineraire-ch//FR', 'CALSCALE:GREGORIAN', events, 'END:VCALENDAR'].join('\r\n');
+  downloadBlob(ics, 'text/calendar', 'trajet.ics');
+  showToast(`${journeySections.length + (selectedPlaceWalk ? 1 : 0)} étape(s) ajoutée(s), chacune avec une alarme 5 min avant.`, 4500);
 }
 
 function showTripDetail(idx){
@@ -1037,6 +1128,8 @@ function showTripDetail(idx){
   } else {
     document.getElementById('live-map-badge').innerHTML = '<span class="live-dot-red"></span>Carte indisponible pour ce départ';
   }
+
+  document.getElementById('calendar-cta-btn').onclick = () => saveTripToCalendar(c);
 
   document.getElementById('maps-cta-btn').onclick = () => {
     const destCoord = selectedPlaceWalk ? selectedPlaceWalk.coordinate : c.to.station.coordinate;
