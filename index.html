@@ -123,6 +123,16 @@
   .status-closed{ color:var(--coral); font-weight:600; font-size:11.5px; }
   .value-badge{ display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:700; color:#8A5A00; background:#FCEBC8; padding:3px 8px; border-radius:20px; margin-top:5px; }
 
+  .place-detail-modal{ position:fixed; inset:0; z-index:300; display:none; }
+  .place-detail-modal.show{ display:block; }
+  .place-detail-backdrop{ position:absolute; inset:0; background:rgba(27,36,48,.5); }
+  .place-detail-sheet{
+    position:absolute; left:0; right:0; bottom:0; max-width:520px; margin:0 auto;
+    background:var(--paper); border-radius:20px 20px 0 0; padding:22px 20px calc(env(safe-area-inset-bottom) + 20px);
+    max-height:80vh; overflow-y:auto;
+  }
+  .place-detail-close{ position:absolute; top:14px; right:16px; width:30px; height:30px; border-radius:50%; background:var(--paper-raised); border:1px solid var(--line); font-size:14px; }
+
   .maps-cta{ margin:0 20px 20px; background:none; border:1px dashed var(--ink-soft); color:var(--ink-soft); border-radius:12px; padding:11px; font-family:'Inter',sans-serif; font-size:12.5px; text-align:center; }
 
   .live-map-wrap{ position:relative; margin:0 20px 16px; height:160px; border-radius:16px; overflow:hidden; border:1px solid var(--line); }
@@ -238,6 +248,14 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="place-detail-modal" id="place-detail-modal">
+  <div class="place-detail-backdrop" onclick="closePlaceDetail()"></div>
+  <div class="place-detail-sheet">
+    <button class="place-detail-close" onclick="closePlaceDetail()">✕</button>
+    <div id="place-detail-body"></div>
+  </div>
+</div>
 
 <script>
   // Chargement asynchrone de Google Maps — la clé est restreinte au domaine GitHub Pages de Marcel
@@ -769,7 +787,7 @@ async function loadAroundScreen(){
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
-        'X-Goog-FieldMask': 'places.displayName,places.rating,places.userRatingCount,places.priceLevel,places.currentOpeningHours.openNow,places.location'
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.rating,places.userRatingCount,places.priceLevel,places.currentOpeningHours.openNow,places.location'
       },
       body: JSON.stringify({
         includedTypes: ['restaurant'],
@@ -787,6 +805,7 @@ async function loadAroundScreen(){
       const priceLvl = PRICE_LEVEL_MAP[p.priceLevel] || 2;
       const hasEnoughReviews = (p.userRatingCount || 0) >= 5;
       return {
+        id: p.id,
         name: p.displayName ? p.displayName.text : 'Restaurant',
         rating: p.rating || null,
         ratingCount: p.userRatingCount || 0,
@@ -808,6 +827,13 @@ async function loadAroundScreen(){
   }
 }
 
+const PRICE_LABELS = {
+  1: 'CHF · Abordable',
+  2: 'CHF CHF · Modéré',
+  3: 'CHF CHF CHF · Cher',
+  4: 'CHF CHF CHF CHF · Très cher'
+};
+
 function renderAroundPlaces(sortBy){
   const list = document.getElementById('around-places-list');
   let sorted = [...aroundPlaces];
@@ -817,24 +843,73 @@ function renderAroundPlaces(sortBy){
 
   const topValueName = (sortBy === 'value' && sorted[0] && sorted[0].valueScore > 0) ? sorted[0].name : null;
 
-  list.innerHTML = sorted.map(p => {
-    const priceTxt = Array(p.priceLvl).fill('CHF').join(' ');
+  list.innerHTML = sorted.map((p, i) => {
+    const priceTxt = PRICE_LABELS[p.priceLvl] || 'Prix non communiqué';
     const openTxt = p.openNow === true ? '<span class="status-open">● Ouvert</span>' : (p.openNow === false ? '<span class="status-closed">● Fermé</span>' : '<span class="meta-txt">Horaires inconnus</span>');
     const isTop = p.name === topValueName;
-    return `<div class="place-card ${isTop ? 'top-value' : ''}">
+    return `<div class="place-card ${isTop ? 'top-value' : ''}" onclick="openPlaceDetail('${p.id}')" style="cursor:pointer;">
       <div class="place-thumb">🍽️</div>
       <div class="place-info">
         <div class="place-name">${p.name}</div>
         <div class="place-meta">
           ${p.rating ? `<span class="rating">★ ${p.rating}</span><span class="dot-sep"></span><span class="meta-txt">${p.ratingCount} avis</span><span class="dot-sep"></span>` : '<span class="meta-txt">Pas encore noté</span>'}
-          <span class="meta-txt">${priceTxt}</span>
         </div>
+        <div class="meta-txt" style="margin-top:3px; font-weight:600;">${priceTxt}</div>
         ${isTop ? '<div class="value-badge">🏆 Meilleur rapport qualité-prix</div>' : ''}
         <div class="place-meta" style="margin-top:5px;">${openTxt}</div>
-        <div class="meta-txt" style="margin-top:3px;">${p.distance} m</div>
+        <div class="meta-txt" style="margin-top:3px;">${p.distance} m · toucher pour en savoir plus</div>
       </div>
     </div>`;
   }).join('');
+}
+
+// ---------- Fiche détaillée d'un restaurant ----------
+async function openPlaceDetail(placeId){
+  const modal = document.getElementById('place-detail-modal');
+  const body = document.getElementById('place-detail-body');
+  modal.classList.add('show');
+  body.innerHTML = '<div class="flap-loading" style="padding:20px;">Chargement de la fiche…</div>';
+
+  try{
+    const res = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
+      headers: {
+        'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+        'X-Goog-FieldMask': 'displayName,rating,userRatingCount,priceLevel,formattedAddress,nationalPhoneNumber,websiteUri,googleMapsUri,regularOpeningHours.weekdayDescriptions,currentOpeningHours.openNow'
+      }
+    });
+    const p = await res.json();
+    bumpUsage('usage_places_calls');
+    if(p.error){
+      body.innerHTML = `<div class="flap-empty" style="padding:20px;">Erreur : ${p.error.message || 'raison inconnue'}</div>`;
+      return;
+    }
+    const priceTxt = PRICE_LABELS[PRICE_LEVEL_MAP[p.priceLevel]] || 'Prix non communiqué';
+    const openTxt = p.currentOpeningHours ? (p.currentOpeningHours.openNow ? '<span class="status-open">● Ouvert maintenant</span>' : '<span class="status-closed">● Fermé maintenant</span>') : '';
+    const hoursHtml = (p.regularOpeningHours?.weekdayDescriptions || []).map(d => `<div class="meta-txt">${d}</div>`).join('');
+
+    body.innerHTML = `
+      <h2 class="app-title" style="font-size:19px; margin-bottom:6px;">${p.displayName ? p.displayName.text : 'Restaurant'}</h2>
+      <div class="place-meta" style="margin-bottom:4px;">
+        ${p.rating ? `<span class="rating">★ ${p.rating}</span><span class="dot-sep"></span><span class="meta-txt">${p.userRatingCount || 0} avis</span>` : '<span class="meta-txt">Pas encore noté</span>'}
+      </div>
+      <div class="meta-txt" style="font-weight:600; margin-bottom:4px;">${priceTxt}</div>
+      <div style="margin-bottom:10px;">${openTxt}</div>
+      ${p.formattedAddress ? `<div class="meta-txt" style="margin-bottom:6px;">📍 ${p.formattedAddress}</div>` : ''}
+      ${p.nationalPhoneNumber ? `<div class="meta-txt" style="margin-bottom:6px;">📞 ${p.nationalPhoneNumber}</div>` : ''}
+      ${hoursHtml ? `<div class="section-label" style="margin:14px 0 6px;">Horaires</div>${hoursHtml}` : ''}
+      <div style="display:flex; gap:8px; margin-top:16px;">
+        ${p.websiteUri ? `<a href="${p.websiteUri}" target="_blank" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">🌐 Site / Menu</a>` : ''}
+        ${p.googleMapsUri ? `<a href="${p.googleMapsUri}" target="_blank" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">📍 Fiche Google</a>` : ''}
+      </div>
+      <p class="meta-txt" style="margin-top:14px; line-height:1.4;">ⓘ Le menu détaillé n'est pas fourni par l'API Google — le lien "Fiche Google" affiche souvent les photos de menu ajoutées par l'établissement ou les visiteurs.</p>
+    `;
+  } catch(e){
+    body.innerHTML = `<div class="flap-empty" style="padding:20px;">Impossible de charger la fiche : ${e.message || e}</div>`;
+  }
+}
+
+function closePlaceDetail(){
+  document.getElementById('place-detail-modal').classList.remove('show');
 }
 
 function showTripDetail(idx){
