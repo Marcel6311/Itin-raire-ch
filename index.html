@@ -652,7 +652,7 @@ function showTripDetail(idx){
   }
 
   const journeySections = (c.sections || []).filter(sec => sec.journey);
-  const transferWalks = []; // {fromCoord, toCoord} — une par correspondance à pied détectée, pour le bouton "Voir ce passage"
+  const transferWalks = []; // {walkStepId, fromName, toName} — une par frontière entre deux lignes, résolue après coup
   journeySections.forEach((sec, i) => {
     const mode = iconForCategory(sec.journey.category);
     const depDelay = computeDelayMin(sec.departure);
@@ -668,23 +668,20 @@ function showTripDetail(idx){
     const arrDelay = computeDelayMin(sec.arrival);
     const nextSec = !isLast ? journeySections[i+1] : null;
 
-    // Correspondance détectée si l'arrêt de descente et l'arrêt de montée suivant sont physiquement différents
-    const sameStop = nextSec && sec.arrival.station.id && nextSec.departure.station.id
-      ? sec.arrival.station.id === nextSec.departure.station.id
-      : (nextSec ? sec.arrival.station.name === nextSec.departure.station.name : true);
-
     steps.push(`<div class="step">
       <div class="step-dot" style="background:var(--amber);">⬇︎</div>
       <div><div class="step-title">${isLast ? 'Descendez ici — terminus de ce trajet' : 'Descendez à ' + sec.arrival.station.name}</div>
-      <div class="step-sub">${arrDelay>0 ? 'Retard signalé +'+arrDelay+' min à l\'arrivée' : 'Arrivée à l\'heure prévue'}${(!isLast && sameStop) ? ' · correspondance sur le même arrêt' : ''}</div>
+      <div class="step-sub" id="${isLast ? '' : 'alight-sub-'+i}">${arrDelay>0 ? 'Retard signalé +'+arrDelay+' min à l\'arrivée' : 'Arrivée à l\'heure prévue'}</div>
       <div class="step-time">${fmtTime(sec.arrival.arrival)}</div></div>
     </div>`);
 
-    if(!isLast && !sameStop){
+    // On ne présélectionne plus rien ici : chaque frontière entre deux lignes est vérifiée
+    // après coup avec la vraie distance, plutôt que de se fier à un identifiant d'arrêt.
+    if(!isLast){
       const walkStepId = 'walk-step-' + i;
       steps.push(`<div class="step" id="${walkStepId}">
         <div class="step-dot" style="background:var(--ink-soft);">🚶</div>
-        <div><div class="step-title">Correspondance à pied vers ${nextSec.departure.station.name}</div>
+        <div><div class="step-title" id="${walkStepId}-title">Correspondance vers ${nextSec.departure.station.name}</div>
         <div class="step-sub" id="${walkStepId}-sub">Calcul du passage…</div>
         <button class="transfer-map-btn" id="${walkStepId}-btn" style="display:none;">🗺️ Voir ce passage</button></div>
       </div>`);
@@ -704,12 +701,14 @@ function showTripDetail(idx){
 
   document.getElementById('detail-steps').innerHTML = steps.join('');
 
-  // Résolution fiable des coordonnées de chaque correspondance, via le même endpoint /locations
-  // utilisé partout ailleurs dans l'appli (plutôt que de dépendre d'un champ parfois absent
-  // dans la réponse /connections).
+  // Résolution après coup : on calcule la vraie distance entre les deux arrêts de chaque frontière.
+  // En dessous de 25 m, on considère que c'est le même point physique (pas de marche à afficher).
+  const SAME_STOP_THRESHOLD_M = 25;
   transferWalks.forEach(async (tw) => {
+    const titleEl = document.getElementById(tw.walkStepId + '-title');
     const subEl = document.getElementById(tw.walkStepId + '-sub');
     const btnEl = document.getElementById(tw.walkStepId + '-btn');
+    const stepEl = document.getElementById(tw.walkStepId);
     try{
       const [fromRes, toRes] = await Promise.all([
         fetch(`${API}/locations?query=${encodeURIComponent(tw.fromName)}`).then(r => r.json()),
@@ -719,14 +718,20 @@ function showTripDetail(idx){
       const toCoord = toRes.stations?.[0]?.coordinate;
       if(fromCoord && toCoord){
         const walkDist = Math.round(haversineMeters(fromCoord.x, fromCoord.y, toCoord.x, toCoord.y));
-        if(subEl) subEl.textContent = `≈ ${walkMinutes(walkDist)} min de marche (≈ ${walkDist} m, estimation à vol d'oiseau)`;
-        if(btnEl){
-          btnEl.style.display = '';
-          btnEl.textContent = `🗺️ Voir ce passage (${tw.fromName} → ${tw.toName})`;
-          btnEl.addEventListener('click', () => {
-            const url = `https://www.google.com/maps/dir/?api=1&travelmode=walking&origin=${fromCoord.x},${fromCoord.y}&destination=${toCoord.x},${toCoord.y}`;
-            window.open(url, '_blank');
-          });
+        if(walkDist <= SAME_STOP_THRESHOLD_M){
+          if(stepEl){ stepEl.querySelector('.step-dot').textContent = '↔︎'; }
+          if(titleEl) titleEl.textContent = 'Correspondance sur le même arrêt';
+          if(subEl) subEl.textContent = 'Pas de marche significative signalée entre ces deux lignes.';
+        } else {
+          if(subEl) subEl.textContent = `≈ ${walkMinutes(walkDist)} min de marche (≈ ${walkDist} m, estimation à vol d'oiseau)`;
+          if(btnEl){
+            btnEl.style.display = '';
+            btnEl.textContent = `🗺️ Voir ce passage (${tw.fromName} → ${tw.toName})`;
+            btnEl.addEventListener('click', () => {
+              const url = `https://www.google.com/maps/dir/?api=1&travelmode=walking&origin=${fromCoord.x},${fromCoord.y}&destination=${toCoord.x},${toCoord.y}`;
+              window.open(url, '_blank');
+            });
+          }
         }
       } else {
         if(subEl) subEl.textContent = 'Rejoignez le prochain arrêt à pied (carte indisponible pour ce passage).';
