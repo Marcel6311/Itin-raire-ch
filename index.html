@@ -786,6 +786,20 @@ function showTripDetail(idx){
 
   document.getElementById('maps-cta-btn').onclick = () => {
     const destCoord = selectedPlaceWalk ? selectedPlaceWalk.coordinate : c.to.station.coordinate;
+
+    // Garde-fou : ce bouton sert au DERNIER tronçon à pied, une fois vraiment sur place
+    // (ta position réelle en direct, utile pour sortir de grandes gares par le bon côté).
+    // S'il est pressé trop tôt (avant même le trajet en transport), on avertit plutôt que
+    // de calculer une marche absurde sur toute la distance.
+    const WALK_SANITY_LIMIT_M = 1500;
+    if(userCoords && destCoord && destCoord.x && destCoord.y){
+      const straightDist = haversineMeters(userCoords.lat, userCoords.lon, destCoord.x, destCoord.y);
+      if(straightDist > WALK_SANITY_LIMIT_M){
+        showToast(`Vous semblez encore loin (≈ ${(straightDist/1000).toFixed(1)} km à vol d'oiseau) — ce bouton est prévu pour le dernier tronçon à pied, une fois arrivé(e) à l'arrêt. Prenez d'abord votre transport, puis ouvrez ce lien sur place.`, 6000);
+        return;
+      }
+    }
+
     let url = 'https://www.google.com/maps/dir/?api=1&travelmode=walking';
     if(userCoords){
       url += `&origin=${userCoords.lat},${userCoords.lon}`;
