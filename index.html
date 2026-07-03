@@ -485,12 +485,33 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
   box.innerHTML = stationsHtml + placesHtml;
 
   box.querySelectorAll('.ac-item[data-kind="station"]').forEach(el => {
-    el.addEventListener('mousedown', () => {
+    el.addEventListener('mousedown', async () => {
       const s = stationItems[parseInt(el.dataset.idx)];
-      const chosen = { id: s.id, name: s.name, coordinate: s.coordinate };
-      if(kind === 'origin') selectedOrigin = chosen; else { selectedDestination = chosen; selectedPlaceWalk = null; }
       document.getElementById(inputId).value = s.name;
       box.classList.remove('show');
+
+      if(kind === 'origin'){
+        selectedOrigin = { id: s.id, name: s.name, coordinate: s.coordinate };
+        return;
+      }
+
+      // Un arrêt de transport (🚏) sert directement de destination : pas de marche finale à calculer.
+      if(s.type !== 'address'){
+        selectedDestination = { id: s.id, name: s.name, coordinate: s.coordinate };
+        selectedPlaceWalk = null;
+        return;
+      }
+
+      // Une adresse (📍) — ex. "chemin des Perrettes 19, Ecublens" — nécessite de trouver
+      // l'arrêt le plus proche ET de conserver l'adresse exacte pour la marche finale,
+      // exactement comme pour un restaurant trouvé via Google Places.
+      if(!s.coordinate){
+        selectedDestination = { id: s.id, name: s.name };
+        selectedPlaceWalk = null;
+        showToast("Coordonnées introuvables pour cette adresse — le dernier tronçon à pied ne sera pas affiché.");
+        return;
+      }
+      await resolveAddressDestination(s.coordinate.x, s.coordinate.y, s.name);
     });
   });
 
@@ -505,6 +526,36 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
   box.classList.add('show');
 }
 
+// Résout n'importe quelle destination finale précise (adresse ou lieu) vers le ou les arrêts
+// de transport public les plus proches, et conserve les coordonnées exactes pour la marche finale.
+async function resolveFinalDestination(lat, lon, label){
+  const res = await fetch(`${API}/locations?x=${lat}&y=${lon}&type=station`);
+  const data = await res.json();
+  const nearStations = (data.stations || []).filter(s => s.id).slice(0, 2);
+  if(nearStations.length === 0){
+    showToast("Aucun arrêt de transport trouvé à proximité de cette destination.");
+    selectedDestination = null;
+    selectedPlaceWalk = null;
+    return;
+  }
+  selectedDestination = { id: nearStations[0].id, name: nearStations[0].name, coordinate: nearStations[0].coordinate };
+  selectedPlaceWalk = {
+    placeName: label,
+    coordinate: { x: lat, y: lon },
+    stops: nearStations.map(s => ({ name: s.name, distance: Math.round(s.distance || 0) }))
+  };
+  const stopsTxt = nearStations.map(s => `${s.name} (${Math.round(s.distance || 0)} m)`).join(' · ');
+  showToast('Arrêt(s) le(s) plus proche(s) : ' + stopsTxt, 4200);
+}
+
+async function resolveAddressDestination(lat, lon, name){
+  try{
+    await resolveFinalDestination(lat, lon, name);
+  } catch(e){
+    showToast("Impossible de localiser précisément cette adresse — réessayez ou choisissez un arrêt directement.");
+  }
+}
+
 // Résout un lieu Google Places (ex. un restaurant) vers l'arrêt de transport public le plus proche
 async function resolvePlaceDestination(pred, inputId){
   try{
@@ -512,23 +563,7 @@ async function resolvePlaceDestination(pred, inputId){
     await place.fetchFields({ fields: ['location','displayName'] });
     const lat = place.location.lat(), lon = place.location.lng();
     document.getElementById(inputId).value = place.displayName || document.getElementById(inputId).value;
-
-    const res = await fetch(`${API}/locations?x=${lat}&y=${lon}&type=station`);
-    const data = await res.json();
-    const nearStations = (data.stations || []).filter(s => s.id).slice(0, 2);
-    if(nearStations.length === 0){
-      showToast("Aucun arrêt de transport trouvé à proximité de ce lieu.");
-      return;
-    }
-
-    selectedDestination = { id: nearStations[0].id, name: nearStations[0].name, coordinate: nearStations[0].coordinate };
-    selectedPlaceWalk = {
-      placeName: place.displayName || '',
-      coordinate: { x: lat, y: lon },
-      stops: nearStations.map(s => ({ name: s.name, distance: Math.round(s.distance || 0) }))
-    };
-    const stopsTxt = nearStations.map(s => `${s.name} (${Math.round(s.distance || 0)} m)`).join(' · ');
-    showToast('Arrêt(s) le(s) plus proche(s) : ' + stopsTxt, 4200);
+    await resolveFinalDestination(lat, lon, place.displayName || '');
   } catch(e){
     showToast("Impossible de localiser précisément ce lieu — réessayez ou choisissez un arrêt directement.");
   }
