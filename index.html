@@ -650,25 +650,37 @@ function showTripDetail(idx){
     </div>`);
   }
 
-  (c.sections || []).forEach(sec => {
+  const journeySections = (c.sections || []).filter(sec => sec.journey || sec.walk);
+  journeySections.forEach((sec, i) => {
     if(sec.journey){
       const mode = iconForCategory(sec.journey.category);
-      const delay = computeDelayMin(sec.departure);
+      const depDelay = computeDelayMin(sec.departure);
       const platform = sec.departure.platform ? 'quai ' + sec.departure.platform : '';
       steps.push(`<div class="step">
         <div class="step-dot ${mode.cls}">${mode.icon}</div>
-        <div><div class="step-title">${sec.journey.category}${sec.journey.number ? ' '+sec.journey.number : ''} — direction ${sec.journey.to || ''}</div>
-        <div class="step-sub">${platform}${delay>0 ? ' · retard signalé +'+delay+' min' : ''}</div>
-        <div class="step-time">${fmtTime(sec.departure.departure)} → ${fmtTime(sec.arrival.arrival)}</div></div>
+        <div><div class="step-title">Montez : ${sec.journey.category}${sec.journey.number ? ' '+sec.journey.number : ''} — direction ${sec.journey.to || ''}</div>
+        <div class="step-sub">${platform}${depDelay>0 ? ' · retard signalé +'+depDelay+' min' : ''}</div>
+        <div class="step-time">Départ ${fmtTime(sec.departure.departure)}</div></div>
+      </div>`);
+
+      const isLast = i === journeySections.length - 1;
+      const arrDelay = computeDelayMin(sec.arrival);
+      const nextIsWalk = !isLast && journeySections[i+1].walk;
+      steps.push(`<div class="step">
+        <div class="step-dot" style="background:var(--amber);">⬇︎</div>
+        <div><div class="step-title">${isLast ? 'Descendez ici — terminus de ce trajet' : 'Descendez à ' + sec.arrival.station.name}</div>
+        <div class="step-sub">${arrDelay>0 ? 'Retard signalé +'+arrDelay+' min à l\'arrivée' : 'Arrivée à l\'heure prévue'}${(!isLast && !nextIsWalk) ? ' · correspondance sur place, pas de marche signalée' : ''}</div>
+        <div class="step-time">${fmtTime(sec.arrival.arrival)}</div></div>
+      </div>`);
+    } else if(sec.walk){
+      const mins = sec.walk.duration ? Math.round(sec.walk.duration/60) : null;
+      steps.push(`<div class="step">
+        <div class="step-dot" style="background:var(--ink-soft);">🚶</div>
+        <div><div class="step-title">Correspondance à pied</div>
+        <div class="step-sub">${mins ? mins+' min de marche jusqu\'au prochain arrêt/quai' : 'Rejoignez le prochain arrêt ou quai à pied'}</div></div>
       </div>`);
     }
   });
-
-  steps.push(`<div class="step">
-    <div class="step-dot" style="background:var(--coral);">📍</div>
-    <div><div class="step-title">${c.to.station.name}</div>
-    <div class="step-sub">Arrêt d'arrivée le plus proche de votre destination</div></div>
-  </div>`);
 
   if(selectedPlaceWalk){
     const mainStop = selectedPlaceWalk.stops[0];
