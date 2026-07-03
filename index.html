@@ -681,20 +681,14 @@ function showTripDetail(idx){
     </div>`);
 
     if(!isLast && !sameStop){
-      const fromCoord = sec.arrival.station.coordinate;
-      const toCoord = nextSec.departure.station.coordinate;
-      const walkDist = (fromCoord && toCoord) ? Math.round(haversineMeters(fromCoord.x, fromCoord.y, toCoord.x, toCoord.y)) : null;
-      let mapBtnHtml = '';
-      if(fromCoord && toCoord){
-        transferWalks.push({ fromCoord, toCoord });
-        mapBtnHtml = `<button class="transfer-map-btn" data-transfer-idx="${transferWalks.length - 1}">🗺️ Voir ce passage (${sec.arrival.station.name} → ${nextSec.departure.station.name})</button>`;
-      }
-      steps.push(`<div class="step">
+      const walkStepId = 'walk-step-' + i;
+      steps.push(`<div class="step" id="${walkStepId}">
         <div class="step-dot" style="background:var(--ink-soft);">🚶</div>
         <div><div class="step-title">Correspondance à pied vers ${nextSec.departure.station.name}</div>
-        <div class="step-sub">${walkDist ? '≈ ' + walkMinutes(walkDist) + ' min de marche (≈ ' + walkDist + ' m, estimation à vol d\'oiseau)' : 'Rejoignez le prochain arrêt à pied'}</div>
-        ${mapBtnHtml}</div>
+        <div class="step-sub" id="${walkStepId}-sub">Calcul du passage…</div>
+        <button class="transfer-map-btn" id="${walkStepId}-btn" style="display:none;">🗺️ Voir ce passage</button></div>
       </div>`);
+      transferWalks.push({ walkStepId, fromName: sec.arrival.station.name, toName: nextSec.departure.station.name });
     }
   });
 
@@ -710,13 +704,36 @@ function showTripDetail(idx){
 
   document.getElementById('detail-steps').innerHTML = steps.join('');
 
-  document.querySelectorAll('.transfer-map-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tw = transferWalks[parseInt(btn.dataset.transferIdx)];
-      if(!tw) return;
-      const url = `https://www.google.com/maps/dir/?api=1&travelmode=walking&origin=${tw.fromCoord.x},${tw.fromCoord.y}&destination=${tw.toCoord.x},${tw.toCoord.y}`;
-      window.open(url, '_blank');
-    });
+  // Résolution fiable des coordonnées de chaque correspondance, via le même endpoint /locations
+  // utilisé partout ailleurs dans l'appli (plutôt que de dépendre d'un champ parfois absent
+  // dans la réponse /connections).
+  transferWalks.forEach(async (tw) => {
+    const subEl = document.getElementById(tw.walkStepId + '-sub');
+    const btnEl = document.getElementById(tw.walkStepId + '-btn');
+    try{
+      const [fromRes, toRes] = await Promise.all([
+        fetch(`${API}/locations?query=${encodeURIComponent(tw.fromName)}`).then(r => r.json()),
+        fetch(`${API}/locations?query=${encodeURIComponent(tw.toName)}`).then(r => r.json())
+      ]);
+      const fromCoord = fromRes.stations?.[0]?.coordinate;
+      const toCoord = toRes.stations?.[0]?.coordinate;
+      if(fromCoord && toCoord){
+        const walkDist = Math.round(haversineMeters(fromCoord.x, fromCoord.y, toCoord.x, toCoord.y));
+        if(subEl) subEl.textContent = `≈ ${walkMinutes(walkDist)} min de marche (≈ ${walkDist} m, estimation à vol d'oiseau)`;
+        if(btnEl){
+          btnEl.style.display = '';
+          btnEl.textContent = `🗺️ Voir ce passage (${tw.fromName} → ${tw.toName})`;
+          btnEl.addEventListener('click', () => {
+            const url = `https://www.google.com/maps/dir/?api=1&travelmode=walking&origin=${fromCoord.x},${fromCoord.y}&destination=${toCoord.x},${toCoord.y}`;
+            window.open(url, '_blank');
+          });
+        }
+      } else {
+        if(subEl) subEl.textContent = 'Rejoignez le prochain arrêt à pied (carte indisponible pour ce passage).';
+      }
+    } catch(e){
+      if(subEl) subEl.textContent = 'Rejoignez le prochain arrêt à pied (carte indisponible pour ce passage).';
+    }
   });
 
   // La carte en direct montre le prochain arrêt à rejoindre à pied (l'étape immédiate),
