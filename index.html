@@ -215,6 +215,7 @@
     </div>
     <div id="detail-steps"></div>
     <button class="maps-cta" id="maps-cta-btn">🗺️ Ouvrir l'itinéraire à pied dans Maps</button>
+    <button class="maps-cta" id="restos-cta-btn" onclick="showScreen('around')" style="border-style:solid; background:var(--coral-dim); color:#9A3D22; font-weight:600;">🍽️ Voir les restaurants à la destination</button>
   </div>
 
   <div class="screen" id="screen-around">
@@ -657,13 +658,23 @@ async function searchTrips(){
     renderResults(fromLabel, fromDistanceMeters);
 
     // Mémorise la destination réelle (adresse/lieu précis si connu, sinon l'arrêt d'arrivée)
-    // pour alimenter l'écran "Autour".
+    // pour alimenter l'écran "Autour". On repasse par /locations pour être sûr d'avoir
+    // des coordonnées fiables (le champ coordinate direct de /connections n'est pas
+    // toujours présent, comme on l'a déjà vu pour les correspondances).
     if(selectedPlaceWalk){
       lastAroundCoord = selectedPlaceWalk.coordinate;
       lastAroundLabel = selectedPlaceWalk.placeName;
     } else if(currentConnections[0]){
-      lastAroundCoord = currentConnections[0].to.station.coordinate;
-      lastAroundLabel = currentConnections[0].to.station.name;
+      const arrivalName = currentConnections[0].to.station.name;
+      lastAroundLabel = arrivalName;
+      lastAroundCoord = currentConnections[0].to.station.coordinate || null;
+      if(!lastAroundCoord){
+        try{
+          const locRes = await fetch(`${API}/locations?query=${encodeURIComponent(arrivalName)}`);
+          const locData = await locRes.json();
+          lastAroundCoord = locData.stations?.[0]?.coordinate || null;
+        } catch(e2){ lastAroundCoord = null; }
+      }
     }
   } catch(e){
     btn.disabled = false; btn.innerHTML = 'Voir les trajets <span class="arrow">→</span>';
@@ -763,6 +774,10 @@ async function loadAroundScreen(){
       })
     });
     const data = await res.json();
+    if(data.error){
+      document.getElementById('around-places-list').innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur Google Places : ${data.error.message || 'raison inconnue'} (code ${data.error.status || res.status}).</div>`;
+      return;
+    }
     aroundPlaces = (data.places || []).map(p => {
       const dist = haversineMeters(lat, lon, p.location.latitude, p.location.longitude);
       const priceLvl = PRICE_LEVEL_MAP[p.priceLevel] || 2;
@@ -785,7 +800,7 @@ async function loadAroundScreen(){
     }
     renderAroundPlaces('value');
   } catch(e){
-    document.getElementById('around-places-list').innerHTML = '<div class="flap-empty" style="padding:0 20px;">Impossible de charger les restaurants — vérifiez que "Places API (New)" est bien activée sur ta clé Google Cloud.</div>';
+    document.getElementById('around-places-list').innerHTML = `<div class="flap-empty" style="padding:0 20px;">Impossible de charger les restaurants : ${e.message || e}.</div>`;
   }
 }
 
