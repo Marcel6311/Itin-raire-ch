@@ -240,11 +240,21 @@
     <div id="around-content"></div>
   </div>
 
+  <div class="screen" id="screen-visit">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('home')">←</button>
+      <div style="min-width:0;">
+        <p class="eyebrow" id="visit-eyebrow" style="margin:0;">À voir autour de…</p>
+        <h1 class="app-title" style="font-size:19px;" id="visit-title">—</h1>
+      </div>
+    </div>
+    <div id="visit-content"></div>
+  </div>
+
   <div class="bottom-nav">
     <button class="nav-item active" data-nav="home" onclick="showScreen('home')"><span class="ic">🧭</span>Trajet</button>
-    <button class="nav-item" data-nav="around" onclick="showScreen('around')"><span class="ic">🗺️</span>Autour</button>
-    <button class="nav-item" data-nav="favoris"><span class="ic">☆</span>Favoris</button>
-    <button class="nav-item" data-nav="reglages"><span class="ic">⚙︎</span>Réglages</button>
+    <button class="nav-item" data-nav="around" onclick="showScreen('around')"><span class="ic">🍽️</span>Restos</button>
+    <button class="nav-item" data-nav="visit" onclick="showScreen('visit')"><span class="ic">🏛️</span>À voir</button>
   </div>
 </div>
 
@@ -368,6 +378,7 @@ function showScreen(name){
   if(btn) btn.classList.add('active');
   window.scrollTo(0,0);
   if(name === 'around') loadAroundScreen();
+  if(name === 'visit') loadVisitScreen();
 }
 
 // Distance à vol d'oiseau (Haversine) — utilisée uniquement pour estimer un temps de marche indicatif
@@ -744,17 +755,16 @@ const PRICE_LEVEL_MAP = {
 };
 
 async function loadAroundScreen(){
-  document.getElementById('around-eyebrow').textContent = lastAroundLabel ? 'Autour de' : '—';
+  document.getElementById('around-eyebrow').textContent = lastAroundLabel ? 'Restos autour de' : '—';
   document.getElementById('around-title').textContent = lastAroundLabel || 'Aucune destination récente';
   const content = document.getElementById('around-content');
 
   if(!lastAroundCoord){
-    content.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Recherchez d\'abord un trajet — les environs de votre destination s\'afficheront ici automatiquement.</div>';
+    content.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Recherchez d\'abord un trajet — les restaurants autour de votre destination s\'afficheront ici automatiquement.</div>';
     return;
   }
 
   const lat = lastAroundCoord.x, lon = lastAroundCoord.y;
-  let attractionsLoaded = false;
   const agendaQuery = encodeURIComponent("agenda événements aujourd'hui " + lastAroundLabel);
 
   content.innerHTML = `
@@ -768,37 +778,14 @@ async function loadAroundScreen(){
       <a class="agenda-link" href="https://www.google.com/search?q=${agendaQuery}" target="_blank">Voir l'agenda ↗</a>
     </div>
 
-    <div class="sort-row" id="category-tabs">
-      <div class="chip active" data-cat="resto">🍽️ Restaurants</div>
-      <div class="chip" data-cat="visit">🏛️ À voir</div>
+    <div class="sort-row">
+      <div class="chip active" data-sort="value">⭐ Qualité-prix</div>
+      <div class="chip" data-sort="rating">🏅 Mieux noté</div>
+      <div class="chip" data-sort="distance">📍 Plus proche</div>
     </div>
-
-    <div id="resto-panel">
-      <div class="sort-row">
-        <div class="chip active" data-sort="value">⭐ Qualité-prix</div>
-        <div class="chip" data-sort="rating">🏅 Mieux noté</div>
-        <div class="chip" data-sort="distance">📍 Plus proche</div>
-      </div>
-      <p class="value-note">Rapport qualité-prix estimé à partir de la note Google et du niveau de prix — pas un classement officiel (pas de données Michelin/GaultMillau intégrées pour l'instant).</p>
-      <div id="around-places-list"><div class="flap-loading" style="padding:0 20px;">Recherche des restaurants à proximité…</div></div>
-    </div>
-
-    <div id="visit-panel" style="display:none;">
-      <p class="value-note">Sites et monuments issus d'OpenStreetMap et Wikipedia (base ouverte OpenTripMap) — triés par importance touristique.</p>
-      <div id="around-attractions-list"><div class="flap-loading" style="padding:0 20px;">Recherche des sites à proximité…</div></div>
-    </div>
+    <p class="value-note">Rapport qualité-prix estimé à partir de la note Google et du niveau de prix — pas un classement officiel (pas de données Michelin/GaultMillau intégrées pour l'instant).</p>
+    <div id="around-places-list"><div class="flap-loading" style="padding:0 20px;">Recherche des restaurants à proximité…</div></div>
   `;
-
-  document.querySelectorAll('#category-tabs .chip').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('#category-tabs .chip').forEach(c => c.classList.remove('active'));
-      tab.classList.add('active');
-      const isResto = tab.dataset.cat === 'resto';
-      document.getElementById('resto-panel').style.display = isResto ? '' : 'none';
-      document.getElementById('visit-panel').style.display = isResto ? 'none' : '';
-      if(!isResto && !attractionsLoaded){ loadAttractions(lat, lon); attractionsLoaded = true; }
-    });
-  });
 
   document.querySelectorAll('.sort-row .chip[data-sort]').forEach(chip => {
     chip.addEventListener('click', () => {
@@ -862,6 +849,28 @@ const PRICE_LABELS = {
 };
 
 // ---------- Section "À voir" : sites touristiques réels (OpenTripMap) ----------
+async function loadVisitScreen(){
+  document.getElementById('visit-eyebrow').textContent = lastAroundLabel ? 'À voir autour de' : '—';
+  document.getElementById('visit-title').textContent = lastAroundLabel || 'Aucune destination récente';
+  const content = document.getElementById('visit-content');
+
+  if(!lastAroundCoord){
+    content.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Recherchez d\'abord un trajet — les sites autour de votre destination s\'afficheront ici automatiquement.</div>';
+    return;
+  }
+
+  const lat = lastAroundCoord.x, lon = lastAroundCoord.y;
+  content.innerHTML = `
+    <p class="meta-txt" style="margin:0 20px 10px; font-family:'IBM Plex Mono',monospace;">
+      📍 Recherche autour de ${lat.toFixed(5)}, ${lon.toFixed(5)} —
+      <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" style="color:var(--lake);">vérifier sur Maps ↗</a>
+    </p>
+    <p class="value-note" style="margin-top:10px;">Sites et monuments issus d'OpenStreetMap et Wikipedia (base ouverte OpenTripMap) — triés par importance touristique.</p>
+    <div id="around-attractions-list"><div class="flap-loading" style="padding:0 20px;">Recherche des sites à proximité…</div></div>
+  `;
+  loadAttractions(lat, lon);
+}
+
 let aroundAttractions = [];
 
 async function loadAttractions(lat, lon){
