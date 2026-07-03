@@ -101,6 +101,15 @@
 
   .maps-cta{ margin:0 20px 20px; background:none; border:1px dashed var(--ink-soft); color:var(--ink-soft); border-radius:12px; padding:11px; font-family:'Inter',sans-serif; font-size:12.5px; text-align:center; }
 
+  .live-map-wrap{ position:relative; margin:0 20px 16px; height:160px; border-radius:16px; overflow:hidden; border:1px solid var(--line); }
+  .live-map-canvas{ width:100%; height:100%; }
+  .live-map-badge{
+    position:absolute; top:10px; left:10px; z-index:5; background:rgba(27,36,48,.85); color:#fff;
+    font-family:'IBM Plex Mono',monospace; font-size:10px; padding:5px 9px; border-radius:20px;
+    display:flex; align-items:center; gap:5px;
+  }
+  .live-dot-red{ width:7px; height:7px; border-radius:50%; background:var(--coral); animation:pulse 1.4s ease-in-out infinite; }
+
   .bottom-nav{ position:fixed; bottom:0; left:0; right:0; max-width:520px; margin:0 auto; background:rgba(247,245,240,.94); backdrop-filter:blur(10px); border-top:1px solid var(--line); display:flex; padding:10px 10px calc(env(safe-area-inset-bottom) + 10px); }
   .nav-item{ flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; font-family:'Inter',sans-serif; font-size:10.5px; font-weight:600; color:var(--ink-soft); background:none; border:none; padding:6px 0; }
   .nav-item .ic{ font-size:19px; }
@@ -148,6 +157,8 @@
       </div>
       <button class="btn-primary" id="btn-search" onclick="searchTrips()">Voir les trajets <span class="arrow">→</span></button>
     </div>
+
+    <p class="section-label" id="usage-counter" style="cursor:pointer;" onclick="showUsageDetail()">📊 Compteur d'usage Google (indicatif)</p>
   </div>
 
   <!-- ============ ÉCRAN RÉSULTATS ============ -->
@@ -171,11 +182,15 @@
         <h1 class="app-title" style="font-size:19px;" id="detail-duration">—</h1>
       </div>
     </div>
+    <div class="live-map-wrap">
+      <div class="live-map-badge" id="live-map-badge"><span class="live-dot-red"></span>Position en direct</div>
+      <div class="live-map-canvas" id="live-map-canvas"></div>
+    </div>
     <div class="divider-note">
       ⓘ Horaires en temps réel CFF/TL. En cas de perturbation signalée par l'opérateur, le retard apparaît directement sur les étapes ci-dessous.
     </div>
     <div id="detail-steps"></div>
-    <button class="maps-cta" id="maps-cta-btn">🗺️ Ouvrir dans Google Maps (à activer avec ta clé API)</button>
+    <button class="maps-cta" id="maps-cta-btn">🗺️ Ouvrir l'itinéraire à pied dans Maps</button>
   </div>
 
   <div class="bottom-nav">
@@ -189,13 +204,20 @@
 <div class="toast" id="toast"></div>
 
 <script>
+  // Chargement asynchrone de Google Maps — la clé est restreinte au domaine GitHub Pages de Marcel
+  window.__gmapsReady = new Promise(resolve => { window.initMapsSDK = resolve; });
+</script>
+<script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA4bGraPQ65Dp1b6Ph2FXc9y3W8u_LsPgw&libraries=places&callback=initMapsSDK"></script>
+
+<script>
 const API = 'https://transport.opendata.ch/v1';
 let userCoords = null;      // {lat, lon}
 let nearbyStations = [];    // list from /locations
 let selectedDestination = null; // {id, name, coordinate}
+let selectedPlaceWalk = null;   // {placeName, coordinate, stops} — quand la destination est un lieu Google Places résolu vers un arrêt
 let selectedOrigin = null;      // {id, name} — si l'utilisateur choisit un départ précis, sinon on garde l'arrêt géolocalisé
 let currentConnections = [];
-let lastFromLabel = '', lastFromDistanceMeters = null; // mémorise le départ réellement utilisé lors de la recherche
+let lastFromLabel = '', lastFromDistanceMeters = null, lastFromCoordinate = null; // mémorise le départ réellement utilisé lors de la recherche
 
 // ---------- Utilitaires ----------
 function showToast(msg, ms){
@@ -206,7 +228,79 @@ function showToast(msg, ms){
   t._timer = setTimeout(()=> t.classList.remove('show'), ms || 3000);
 }
 
+// ---------- Compteur d'usage local (indicatif uniquement — voir Google Cloud Console pour les vrais chiffres) ----------
+function bumpUsage(key){
+  const n = parseInt(localStorage.getItem(key) || '0', 10) + 1;
+  localStorage.setItem(key, n);
+  updateUsageLabel();
+}
+function updateUsageLabel(){
+  const maps = localStorage.getItem('usage_map_loads') || 0;
+  const places = localStorage.getItem('usage_places_calls') || 0;
+  const el = document.getElementById('usage-counter');
+  if(el) el.textContent = `📊 ${maps} carte(s) · ${places} recherche(s) de lieux (indicatif, depuis l'installation)`;
+}
+function showUsageDetail(){
+  showToast("Ce compteur est purement local et approximatif. Pour les vrais chiffres et un contrôle fiable, consulte Google Cloud Console → APIs & Services → Tableau de bord (ou configure une alerte de budget).", 6000);
+}
+document.addEventListener('DOMContentLoaded', updateUsageLabel);
+
+// ---------- Carte en direct (Google Maps) ----------
+let liveMap = null, liveMarkerYou = null, liveMarkerDest = null, liveDirRenderer = null, liveWatchId = null;
+
+async function renderLiveMap(destCoordX, destCoordY, destName){
+  await window.__gmapsReady;
+  const destLatLng = { lat: parseFloat(destCoordX), lng: parseFloat(destCoordY) };
+  const origin = userCoords ? { lat: userCoords.lat, lng: userCoords.lon } : destLatLng;
+
+  if(!liveMap){
+    liveMap = new google.maps.Map(document.getElementById('live-map-canvas'), {
+      center: origin, zoom: 15, disableDefaultUI: true, gestureHandling: 'greedy'
+    });
+    liveDirRenderer = new google.maps.DirectionsRenderer({ map: liveMap, suppressMarkers: true, polylineOptions: { strokeColor:'#1B2430', strokeWeight:3 } });
+    bumpUsage('usage_map_loads');
+  }
+
+  if(liveMarkerYou) liveMarkerYou.setMap(null);
+  if(liveMarkerDest) liveMarkerDest.setMap(null);
+
+  liveMarkerYou = new google.maps.Marker({
+    position: origin, map: liveMap, title: 'Vous',
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor:'#1B2430', fillOpacity:1, strokeColor:'#fff', strokeWeight:3 }
+  });
+  liveMarkerDest = new google.maps.Marker({
+    position: destLatLng, map: liveMap, title: destName || 'Destination',
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor:'#E4572E', fillOpacity:1, strokeColor:'#fff', strokeWeight:3 }
+  });
+
+  const bounds = new google.maps.LatLngBounds();
+  bounds.extend(origin); bounds.extend(destLatLng);
+  liveMap.fitBounds(bounds, 40);
+
+  if(userCoords){
+    const dirService = new google.maps.DirectionsService();
+    dirService.route({ origin, destination: destLatLng, travelMode: google.maps.TravelMode.WALKING }, (result, status) => {
+      if(status === 'OK') liveDirRenderer.setDirections(result);
+    });
+  }
+
+  // Suivi GPS en direct : le marqueur "vous" avance tant que l'écran détail est ouvert
+  if(liveWatchId) navigator.geolocation.clearWatch(liveWatchId);
+  if('geolocation' in navigator){
+    liveWatchId = navigator.geolocation.watchPosition(pos => {
+      const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      userCoords = { lat: p.lat, lon: p.lng };
+      if(liveMarkerYou) liveMarkerYou.setPosition(p);
+    }, () => {}, { enableHighAccuracy:true });
+  }
+}
+
+function stopLiveMapTracking(){
+  if(liveWatchId){ navigator.geolocation.clearWatch(liveWatchId); liveWatchId = null; }
+}
+
 function showScreen(name){
+  if(name !== 'detail') stopLiveMapTracking();
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + name).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -352,28 +446,91 @@ function setupAutocomplete(inputId, boxId, kind){
 
 async function fetchAutocomplete(q, boxId, inputId, kind){
   const box = document.getElementById(boxId);
+  let stationItems = [];
   try{
     const res = await fetch(`${API}/locations?query=${encodeURIComponent(q)}`);
     const data = await res.json();
-    const items = (data.stations || []).filter(s => s.id).slice(0, 6);
-    if(items.length === 0){ box.classList.remove('show'); return; }
-    box.innerHTML = items.map(s => {
-      const distTxt = (userCoords && s.coordinate) ? Math.round(haversineMeters(userCoords.lat, userCoords.lon, s.coordinate.x, s.coordinate.y)) + ' m' : '';
-      return `<div class="ac-item" data-id="${s.id}" data-name="${s.name.replace(/"/g,'&quot;')}">
-        <span>${s.type === 'address' ? '📍' : '🚏'} ${s.name}</span>
-        <span class="ac-dist">${distTxt}</span>
-      </div>`;
-    }).join('');
-    box.querySelectorAll('.ac-item').forEach(el => {
-      el.addEventListener('mousedown', () => {
-        const chosen = { id: el.dataset.id, name: el.dataset.name };
-        if(kind === 'origin') selectedOrigin = chosen; else selectedDestination = chosen;
-        document.getElementById(inputId).value = el.dataset.name;
-        box.classList.remove('show');
-      });
+    stationItems = (data.stations || []).filter(s => s.id).slice(0, 4);
+  } catch(e){}
+
+  // La recherche de lieux (restaurants, commerces...) n'a de sens que pour le champ destination
+  let placeItems = [];
+  if(kind === 'destination' && window.google && google.maps && google.maps.places){
+    try{
+      const { AutocompleteSuggestion } = await google.maps.importLibrary("places");
+      const req = { input: q };
+      if(userCoords) req.locationBias = { center: { lat: userCoords.lat, lng: userCoords.lon }, radius: 15000 };
+      const { suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions(req);
+      bumpUsage('usage_places_calls');
+      placeItems = (suggestions || []).map(s => s.placePrediction).filter(Boolean).slice(0, 4);
+    } catch(e){ /* Places API pas encore activée ou indisponible — on continue avec les arrêts seuls */ }
+  }
+
+  if(stationItems.length === 0 && placeItems.length === 0){ box.classList.remove('show'); return; }
+
+  const stationsHtml = stationItems.map((s, i) => {
+    const distTxt = (userCoords && s.coordinate) ? Math.round(haversineMeters(userCoords.lat, userCoords.lon, s.coordinate.x, s.coordinate.y)) + ' m' : '';
+    return `<div class="ac-item" data-kind="station" data-idx="${i}">
+      <span>${s.type === 'address' ? '📍' : '🚏'} ${s.name}</span>
+      <span class="ac-dist">${distTxt}</span>
+    </div>`;
+  }).join('');
+
+  const placesHtml = placeItems.map((p, i) => {
+    const label = p.text ? p.text.text : (p.mainText ? p.mainText.text : 'Lieu');
+    return `<div class="ac-item" data-kind="place" data-idx="${i}"><span>🍽️ ${label}</span></div>`;
+  }).join('');
+
+  box.innerHTML = stationsHtml + placesHtml;
+
+  box.querySelectorAll('.ac-item[data-kind="station"]').forEach(el => {
+    el.addEventListener('mousedown', () => {
+      const s = stationItems[parseInt(el.dataset.idx)];
+      const chosen = { id: s.id, name: s.name, coordinate: s.coordinate };
+      if(kind === 'origin') selectedOrigin = chosen; else { selectedDestination = chosen; selectedPlaceWalk = null; }
+      document.getElementById(inputId).value = s.name;
+      box.classList.remove('show');
     });
-    box.classList.add('show');
-  } catch(e){ box.classList.remove('show'); }
+  });
+
+  box.querySelectorAll('.ac-item[data-kind="place"]').forEach(el => {
+    el.addEventListener('mousedown', async () => {
+      const pred = placeItems[parseInt(el.dataset.idx)];
+      box.classList.remove('show');
+      await resolvePlaceDestination(pred, inputId);
+    });
+  });
+
+  box.classList.add('show');
+}
+
+// Résout un lieu Google Places (ex. un restaurant) vers l'arrêt de transport public le plus proche
+async function resolvePlaceDestination(pred, inputId){
+  try{
+    const place = pred.toPlace();
+    await place.fetchFields({ fields: ['location','displayName'] });
+    const lat = place.location.lat(), lon = place.location.lng();
+    document.getElementById(inputId).value = place.displayName || document.getElementById(inputId).value;
+
+    const res = await fetch(`${API}/locations?x=${lat}&y=${lon}&type=station`);
+    const data = await res.json();
+    const nearStations = (data.stations || []).filter(s => s.id).slice(0, 2);
+    if(nearStations.length === 0){
+      showToast("Aucun arrêt de transport trouvé à proximité de ce lieu.");
+      return;
+    }
+
+    selectedDestination = { id: nearStations[0].id, name: nearStations[0].name, coordinate: nearStations[0].coordinate };
+    selectedPlaceWalk = {
+      placeName: place.displayName || '',
+      coordinate: { x: lat, y: lon },
+      stops: nearStations.map(s => ({ name: s.name, distance: Math.round(s.distance || 0) }))
+    };
+    const stopsTxt = nearStations.map(s => `${s.name} (${Math.round(s.distance || 0)} m)`).join(' · ');
+    showToast('Arrêt(s) le(s) plus proche(s) : ' + stopsTxt, 4200);
+  } catch(e){
+    showToast("Impossible de localiser précisément ce lieu — réessayez ou choisissez un arrêt directement.");
+  }
 }
 
 // ---------- Recherche de trajets ----------
@@ -383,14 +540,16 @@ async function searchTrips(){
 
   // Départ : priorité à une station précise choisie via l'autocomplétion.
   // Sinon, on retombe sur l'arrêt géolocalisé le plus proche.
-  let fromId, fromLabel, fromDistanceMeters = null;
+  let fromId, fromLabel, fromDistanceMeters = null, fromCoordinate = null;
   if(selectedOrigin){
     fromId = selectedOrigin.id;
     fromLabel = selectedOrigin.name;
+    fromCoordinate = selectedOrigin.coordinate || null;
   } else if(nearbyStations.length > 0){
     fromId = nearbyStations[0].id;
     fromLabel = nearbyStations[0].name;
     fromDistanceMeters = nearbyStations[0].distance || null;
+    fromCoordinate = nearbyStations[0].coordinate || null;
   } else {
     showToast("Indiquez un point de départ précis, ou activez la localisation.");
     return;
@@ -402,6 +561,7 @@ async function searchTrips(){
   const toParam = selectedDestination ? selectedDestination.id : destInput;
   lastFromLabel = fromLabel;
   lastFromDistanceMeters = fromDistanceMeters;
+  lastFromCoordinate = fromCoordinate;
 
   showScreen('results');
   document.getElementById('results-route').textContent = fromLabel + ' → ' + destInput;
@@ -510,9 +670,38 @@ function showTripDetail(idx){
     <div class="step-sub">Arrêt d'arrivée le plus proche de votre destination</div></div>
   </div>`);
 
+  if(selectedPlaceWalk){
+    const mainStop = selectedPlaceWalk.stops[0];
+    const otherStops = selectedPlaceWalk.stops.slice(1).map(s => s.name + ' (' + s.distance + ' m)').join(', ');
+    steps.push(`<div class="step">
+      <div class="step-dot" style="background:var(--coral); color:#fff;">🍽️</div>
+      <div><div class="step-title">${selectedPlaceWalk.placeName}</div>
+      <div class="step-sub">${walkMinutes(mainStop.distance)} min à pied depuis ${mainStop.name} (≈ ${mainStop.distance} m, estimation à vol d'oiseau)${otherStops ? ' · Autre arrêt proche : ' + otherStops : ''}</div></div>
+    </div>`);
+  }
+
   document.getElementById('detail-steps').innerHTML = steps.join('');
+
+  // La carte en direct montre le prochain arrêt à rejoindre à pied (l'étape immédiate),
+  // pas la destination finale — c'est ce qui compte pendant que tu marches.
+  if(lastFromCoordinate && lastFromCoordinate.x && lastFromCoordinate.y){
+    renderLiveMap(lastFromCoordinate.x, lastFromCoordinate.y, lastFromLabel);
+  } else {
+    document.getElementById('live-map-badge').innerHTML = '<span class="live-dot-red"></span>Carte indisponible pour ce départ';
+  }
+
   document.getElementById('maps-cta-btn').onclick = () => {
-    showToast("La carte Google Maps sera activée une fois ta clé API configurée.");
+    const destCoord = selectedPlaceWalk ? selectedPlaceWalk.coordinate : c.to.station.coordinate;
+    let url = 'https://www.google.com/maps/dir/?api=1&travelmode=walking';
+    if(userCoords){
+      url += `&origin=${userCoords.lat},${userCoords.lon}`;
+    }
+    if(destCoord && destCoord.x && destCoord.y){
+      url += `&destination=${destCoord.x},${destCoord.y}`;
+    } else {
+      url += `&destination=${encodeURIComponent(c.to.station.name)}`;
+    }
+    window.open(url, '_blank');
   };
 }
 </script>
