@@ -267,6 +267,7 @@
 <script>
 const API = 'https://transport.opendata.ch/v1';
 const GOOGLE_MAPS_API_KEY = 'AIzaSyA4bGraPQ65Dp1b6Ph2FXc9y3W8u_LsPgw'; // même clé que le script Maps chargé en tête de page
+const OPENTRIPMAP_API_KEY = 'COLLE_TA_CLE_OPENTRIPMAP_ICI'; // à remplacer — clé gratuite sur dev.opentripmap.org/register
 let userCoords = null;      // {lat, lon}
 let nearbyStations = [];    // list from /locations
 let selectedDestination = null; // {id, name, coordinate}
@@ -753,6 +754,7 @@ async function loadAroundScreen(){
   }
 
   const lat = lastAroundCoord.x, lon = lastAroundCoord.y;
+  let attractionsLoaded = false;
   const agendaQuery = encodeURIComponent("agenda événements aujourd'hui " + lastAroundLabel);
 
   content.innerHTML = `
@@ -765,18 +767,42 @@ async function loadAroundScreen(){
       <div class="agenda-sub">Il n'existe pas de flux fiable et à jour pour les événements locaux en Suisse — plutôt que d'afficher une date qu'on ne peut pas garantir, voici un accès direct vers l'agenda le plus pertinent pour ce lieu.</div>
       <a class="agenda-link" href="https://www.google.com/search?q=${agendaQuery}" target="_blank">Voir l'agenda ↗</a>
     </div>
-    <div class="sort-row">
-      <div class="chip active" data-sort="value">⭐ Qualité-prix</div>
-      <div class="chip" data-sort="rating">🏅 Mieux noté</div>
-      <div class="chip" data-sort="distance">📍 Plus proche</div>
+
+    <div class="sort-row" id="category-tabs">
+      <div class="chip active" data-cat="resto">🍽️ Restaurants</div>
+      <div class="chip" data-cat="visit">🏛️ À voir</div>
     </div>
-    <p class="value-note">Rapport qualité-prix estimé à partir de la note Google et du niveau de prix — pas un classement officiel (pas de données Michelin/GaultMillau intégrées pour l'instant).</p>
-    <div id="around-places-list"><div class="flap-loading" style="padding:0 20px;">Recherche des restaurants à proximité…</div></div>
+
+    <div id="resto-panel">
+      <div class="sort-row">
+        <div class="chip active" data-sort="value">⭐ Qualité-prix</div>
+        <div class="chip" data-sort="rating">🏅 Mieux noté</div>
+        <div class="chip" data-sort="distance">📍 Plus proche</div>
+      </div>
+      <p class="value-note">Rapport qualité-prix estimé à partir de la note Google et du niveau de prix — pas un classement officiel (pas de données Michelin/GaultMillau intégrées pour l'instant).</p>
+      <div id="around-places-list"><div class="flap-loading" style="padding:0 20px;">Recherche des restaurants à proximité…</div></div>
+    </div>
+
+    <div id="visit-panel" style="display:none;">
+      <p class="value-note">Sites et monuments issus d'OpenStreetMap et Wikipedia (base ouverte OpenTripMap) — triés par importance touristique.</p>
+      <div id="around-attractions-list"><div class="flap-loading" style="padding:0 20px;">Recherche des sites à proximité…</div></div>
+    </div>
   `;
 
-  document.querySelectorAll('.sort-row .chip').forEach(chip => {
+  document.querySelectorAll('#category-tabs .chip').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('#category-tabs .chip').forEach(c => c.classList.remove('active'));
+      tab.classList.add('active');
+      const isResto = tab.dataset.cat === 'resto';
+      document.getElementById('resto-panel').style.display = isResto ? '' : 'none';
+      document.getElementById('visit-panel').style.display = isResto ? 'none' : '';
+      if(!isResto && !attractionsLoaded){ loadAttractions(lat, lon); attractionsLoaded = true; }
+    });
+  });
+
+  document.querySelectorAll('.sort-row .chip[data-sort]').forEach(chip => {
     chip.addEventListener('click', () => {
-      document.querySelectorAll('.sort-row .chip').forEach(c => c.classList.remove('active'));
+      document.querySelectorAll('.sort-row .chip[data-sort]').forEach(c => c.classList.remove('active'));
       chip.classList.add('active');
       renderAroundPlaces(chip.dataset.sort);
     });
@@ -834,6 +860,69 @@ const PRICE_LABELS = {
   3: 'CHF CHF CHF · Cher',
   4: 'CHF CHF CHF CHF · Très cher'
 };
+
+// ---------- Section "À voir" : sites touristiques réels (OpenTripMap) ----------
+let aroundAttractions = [];
+
+async function loadAttractions(lat, lon){
+  const list = document.getElementById('around-attractions-list');
+  try{
+    const res = await fetch(`https://api.opentripmap.com/0.1/fr/places/radius?radius=800&lon=${lon}&lat=${lat}&rate=2&kinds=interesting_places&format=json&limit=12&apikey=${OPENTRIPMAP_API_KEY}`);
+    const data = await res.json();
+    if(data.error){
+      list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur OpenTripMap : ${data.error} — vérifie ta clé API dans le code.</div>`;
+      return;
+    }
+    aroundAttractions = (Array.isArray(data) ? data : []).filter(p => p.name);
+    if(aroundAttractions.length === 0){
+      list.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Aucun site notable trouvé dans un rayon de 800 m.</div>';
+      return;
+    }
+    aroundAttractions.sort((a,b) => (b.rate || 0) - (a.rate || 0));
+    list.innerHTML = aroundAttractions.map(p => `
+      <div class="place-card" onclick="openAttractionDetail('${p.xid}')" style="cursor:pointer;">
+        <div class="place-thumb" style="background:var(--lake-dim);">🏛️</div>
+        <div class="place-info">
+          <div class="place-name">${p.name}</div>
+          <div class="meta-txt" style="margin-top:3px;">${Math.round(p.dist || 0)} m · toucher pour en savoir plus</div>
+        </div>
+      </div>
+    `).join('');
+  } catch(e){
+    list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Impossible de charger les sites : ${e.message || e}</div>`;
+  }
+}
+
+async function openAttractionDetail(xid){
+  const modal = document.getElementById('place-detail-modal');
+  const body = document.getElementById('place-detail-body');
+  modal.classList.add('show');
+  body.innerHTML = '<div class="flap-loading" style="padding:20px;">Chargement de la fiche…</div>';
+
+  try{
+    const res = await fetch(`https://api.opentripmap.com/0.1/fr/places/xid/${xid}?apikey=${OPENTRIPMAP_API_KEY}`);
+    const p = await res.json();
+    if(p.error){
+      body.innerHTML = `<div class="flap-empty" style="padding:20px;">Erreur : ${p.error}</div>`;
+      return;
+    }
+    const desc = p.wikipedia_extracts?.text || "Pas de description disponible pour ce lieu.";
+    const imgHtml = p.preview?.source ? `<img src="${p.preview.source}" style="width:100%; border-radius:12px; margin-bottom:12px;">` : '';
+    body.innerHTML = `
+      ${imgHtml}
+      <h2 class="app-title" style="font-size:19px; margin-bottom:6px;">${p.name || 'Site'}</h2>
+      ${p.address?.road ? `<div class="meta-txt" style="margin-bottom:10px;">📍 ${[p.address.road, p.address.city].filter(Boolean).join(', ')}</div>` : ''}
+      <p class="meta-txt" style="line-height:1.5;">${desc}</p>
+      <div style="display:flex; gap:8px; margin-top:16px;">
+        ${p.point ? `<a href="https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=${p.point.lat},${p.point.lon}" target="_blank" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">🗺️ Itinéraire à pied</a>` : ''}
+        ${p.wikipedia ? `<a href="${p.wikipedia}" target="_blank" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">📖 Wikipedia</a>` : ''}
+      </div>
+      <p class="meta-txt" style="margin-top:14px; line-height:1.4;">ⓘ Données ouvertes OpenStreetMap / Wikipedia via OpenTripMap — pas un guide éditorialisé, informations parfois incomplètes selon les contributions.</p>
+    `;
+  } catch(e){
+    body.innerHTML = `<div class="flap-empty" style="padding:20px;">Impossible de charger la fiche : ${e.message || e}</div>`;
+  }
+}
 
 function renderAroundPlaces(sortBy){
   const list = document.getElementById('around-places-list');
