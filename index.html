@@ -100,6 +100,29 @@
   .divider-note{ margin:6px 20px 18px; padding:10px 12px; background:var(--lake-dim); border-radius:10px; font-size:12px; color:#1B4C57; display:flex; gap:8px; align-items:flex-start; }
   .transfer-map-btn{ margin-top:7px; background:var(--lake-dim); color:#1B4C57; border:none; border-radius:9px; padding:7px 11px; font-family:'Inter',sans-serif; font-size:11.5px; font-weight:600; }
 
+  .sort-row{ display:flex; gap:8px; padding:12px 20px 8px; overflow-x:auto; }
+  .chip{ font-family:'Inter',sans-serif; font-size:12.5px; font-weight:500; white-space:nowrap; padding:8px 13px; border-radius:20px; background:var(--paper-raised); border:1px solid var(--line); color:var(--ink-soft); flex-shrink:0; }
+  .chip.active{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
+  .value-note{ margin:0 20px 12px; font-size:11px; color:var(--ink-soft); line-height:1.4; }
+
+  .agenda-card{ margin:14px 20px; background:#1B2430; border-radius:16px; padding:15px 16px; color:#fff; }
+  .agenda-title{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:14px; }
+  .agenda-sub{ font-size:12px; color:#C7CCD4; margin-top:5px; line-height:1.4; }
+  .agenda-link{ display:inline-block; margin-top:10px; font-size:12.5px; font-weight:600; color:#fff; background:rgba(255,255,255,.12); padding:7px 12px; border-radius:9px; }
+
+  .place-card{ display:flex; gap:12px; margin:0 20px 12px; background:var(--paper-raised); border:1px solid var(--line); border-radius:16px; padding:12px; }
+  .place-card.top-value{ border-color:#E8B94A; box-shadow:0 0 0 1px #E8B94A inset; }
+  .place-thumb{ width:52px; height:52px; border-radius:12px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:20px; background:var(--coral-dim); }
+  .place-info{ flex:1; min-width:0; }
+  .place-name{ font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14px; }
+  .place-meta{ display:flex; align-items:center; gap:6px; margin-top:3px; flex-wrap:wrap; }
+  .rating{ font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; color:var(--amber); }
+  .dot-sep{ width:3px; height:3px; border-radius:50%; background:var(--ink-soft); }
+  .meta-txt{ font-size:11.5px; color:var(--ink-soft); }
+  .status-open{ color:var(--leaf); font-weight:600; font-size:11.5px; }
+  .status-closed{ color:var(--coral); font-weight:600; font-size:11.5px; }
+  .value-badge{ display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:700; color:#8A5A00; background:#FCEBC8; padding:3px 8px; border-radius:20px; margin-top:5px; }
+
   .maps-cta{ margin:0 20px 20px; background:none; border:1px dashed var(--ink-soft); color:var(--ink-soft); border-radius:12px; padding:11px; font-family:'Inter',sans-serif; font-size:12.5px; text-align:center; }
 
   .live-map-wrap{ position:relative; margin:0 20px 16px; height:160px; border-radius:16px; overflow:hidden; border:1px solid var(--line); }
@@ -194,9 +217,20 @@
     <button class="maps-cta" id="maps-cta-btn">🗺️ Ouvrir l'itinéraire à pied dans Maps</button>
   </div>
 
+  <div class="screen" id="screen-around">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('home')">←</button>
+      <div style="min-width:0;">
+        <p class="eyebrow" id="around-eyebrow" style="margin:0;">Autour de…</p>
+        <h1 class="app-title" style="font-size:19px;" id="around-title">—</h1>
+      </div>
+    </div>
+    <div id="around-content"></div>
+  </div>
+
   <div class="bottom-nav">
     <button class="nav-item active" data-nav="home" onclick="showScreen('home')"><span class="ic">🧭</span>Trajet</button>
-    <button class="nav-item" data-nav="around"><span class="ic">🗺️</span>Autour</button>
+    <button class="nav-item" data-nav="around" onclick="showScreen('around')"><span class="ic">🗺️</span>Autour</button>
     <button class="nav-item" data-nav="favoris"><span class="ic">☆</span>Favoris</button>
     <button class="nav-item" data-nav="reglages"><span class="ic">⚙︎</span>Réglages</button>
   </div>
@@ -212,6 +246,7 @@
 
 <script>
 const API = 'https://transport.opendata.ch/v1';
+const GOOGLE_MAPS_API_KEY = 'AIzaSyA4bGraPQ65Dp1b6Ph2FXc9y3W8u_LsPgw'; // même clé que le script Maps chargé en tête de page
 let userCoords = null;      // {lat, lon}
 let nearbyStations = [];    // list from /locations
 let selectedDestination = null; // {id, name, coordinate}
@@ -219,6 +254,8 @@ let selectedPlaceWalk = null;   // {placeName, coordinate, stops} — quand la d
 let selectedOrigin = null;      // {id, name} — si l'utilisateur choisit un départ précis, sinon on garde l'arrêt géolocalisé
 let currentConnections = [];
 let lastFromLabel = '', lastFromDistanceMeters = null, lastFromCoordinate = null; // mémorise le départ réellement utilisé lors de la recherche
+let lastAroundCoord = null, lastAroundLabel = ''; // destination de référence pour l'écran "Autour"
+let aroundPlaces = []; // résultats resto en cache pour retri sans nouvel appel réseau
 
 // ---------- Utilitaires ----------
 function showToast(msg, ms){
@@ -309,6 +346,7 @@ function showScreen(name){
   const btn = document.querySelector('[data-nav="'+(map[name]||name)+'"]');
   if(btn) btn.classList.add('active');
   window.scrollTo(0,0);
+  if(name === 'around') loadAroundScreen();
 }
 
 // Distance à vol d'oiseau (Haversine) — utilisée uniquement pour estimer un temps de marche indicatif
@@ -617,6 +655,16 @@ async function searchTrips(){
     }
     document.getElementById('results-title').textContent = currentConnections.length + ' trajets trouvés';
     renderResults(fromLabel, fromDistanceMeters);
+
+    // Mémorise la destination réelle (adresse/lieu précis si connu, sinon l'arrêt d'arrivée)
+    // pour alimenter l'écran "Autour".
+    if(selectedPlaceWalk){
+      lastAroundCoord = selectedPlaceWalk.coordinate;
+      lastAroundLabel = selectedPlaceWalk.placeName;
+    } else if(currentConnections[0]){
+      lastAroundCoord = currentConnections[0].to.station.coordinate;
+      lastAroundLabel = currentConnections[0].to.station.name;
+    }
   } catch(e){
     btn.disabled = false; btn.innerHTML = 'Voir les trajets <span class="arrow">→</span>';
     document.getElementById('results-title').textContent = 'Erreur réseau';
@@ -654,6 +702,118 @@ function renderResults(fromLabel, fromDistanceMeters){
         </div>
       </div>
       <div class="trip-legs">${legsHtml.join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+// ---------- Écran "Autour" : restaurants réels (Google Places) + agenda officiel ----------
+const PRICE_LEVEL_MAP = {
+  PRICE_LEVEL_FREE: 1, PRICE_LEVEL_INEXPENSIVE: 1, PRICE_LEVEL_MODERATE: 2,
+  PRICE_LEVEL_EXPENSIVE: 3, PRICE_LEVEL_VERY_EXPENSIVE: 4
+};
+
+async function loadAroundScreen(){
+  document.getElementById('around-eyebrow').textContent = lastAroundLabel ? 'Autour de' : '—';
+  document.getElementById('around-title').textContent = lastAroundLabel || 'Aucune destination récente';
+  const content = document.getElementById('around-content');
+
+  if(!lastAroundCoord){
+    content.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Recherchez d\'abord un trajet — les environs de votre destination s\'afficheront ici automatiquement.</div>';
+    return;
+  }
+
+  const lat = lastAroundCoord.x, lon = lastAroundCoord.y;
+  const agendaQuery = encodeURIComponent("agenda événements aujourd'hui " + lastAroundLabel);
+
+  content.innerHTML = `
+    <div class="agenda-card">
+      <div class="agenda-title">🔴 Ce qui se passe ici aujourd'hui</div>
+      <div class="agenda-sub">Il n'existe pas de flux fiable et à jour pour les événements locaux en Suisse — plutôt que d'afficher une date qu'on ne peut pas garantir, voici un accès direct vers l'agenda le plus pertinent pour ce lieu.</div>
+      <a class="agenda-link" href="https://www.google.com/search?q=${agendaQuery}" target="_blank">Voir l'agenda ↗</a>
+    </div>
+    <div class="sort-row">
+      <div class="chip active" data-sort="value">⭐ Qualité-prix</div>
+      <div class="chip" data-sort="rating">🏅 Mieux noté</div>
+      <div class="chip" data-sort="distance">📍 Plus proche</div>
+    </div>
+    <p class="value-note">Rapport qualité-prix estimé à partir de la note Google et du niveau de prix — pas un classement officiel (pas de données Michelin/GaultMillau intégrées pour l'instant).</p>
+    <div id="around-places-list"><div class="flap-loading" style="padding:0 20px;">Recherche des restaurants à proximité…</div></div>
+  `;
+
+  document.querySelectorAll('.sort-row .chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.sort-row .chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      renderAroundPlaces(chip.dataset.sort);
+    });
+  });
+
+  try{
+    const res = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+        'X-Goog-FieldMask': 'places.displayName,places.rating,places.userRatingCount,places.priceLevel,places.currentOpeningHours.openNow,places.location'
+      },
+      body: JSON.stringify({
+        includedTypes: ['restaurant'],
+        maxResultCount: 14,
+        locationRestriction: { circle: { center: { latitude: lat, longitude: lon }, radius: 500.0 } }
+      })
+    });
+    const data = await res.json();
+    aroundPlaces = (data.places || []).map(p => {
+      const dist = haversineMeters(lat, lon, p.location.latitude, p.location.longitude);
+      const priceLvl = PRICE_LEVEL_MAP[p.priceLevel] || 2;
+      const hasEnoughReviews = (p.userRatingCount || 0) >= 5;
+      return {
+        name: p.displayName ? p.displayName.text : 'Restaurant',
+        rating: p.rating || null,
+        ratingCount: p.userRatingCount || 0,
+        priceLvl,
+        openNow: p.currentOpeningHours ? p.currentOpeningHours.openNow : null,
+        distance: Math.round(dist),
+        valueScore: (p.rating && hasEnoughReviews) ? p.rating / priceLvl : -1
+      };
+    });
+    bumpUsage('usage_places_calls');
+
+    if(aroundPlaces.length === 0){
+      document.getElementById('around-places-list').innerHTML = '<div class="flap-empty" style="padding:0 20px;">Aucun restaurant trouvé dans un rayon de 500 m.</div>';
+      return;
+    }
+    renderAroundPlaces('value');
+  } catch(e){
+    document.getElementById('around-places-list').innerHTML = '<div class="flap-empty" style="padding:0 20px;">Impossible de charger les restaurants — vérifiez que "Places API (New)" est bien activée sur ta clé Google Cloud.</div>';
+  }
+}
+
+function renderAroundPlaces(sortBy){
+  const list = document.getElementById('around-places-list');
+  let sorted = [...aroundPlaces];
+  if(sortBy === 'value') sorted.sort((a,b) => b.valueScore - a.valueScore);
+  else if(sortBy === 'rating') sorted.sort((a,b) => (b.rating||0) - (a.rating||0));
+  else if(sortBy === 'distance') sorted.sort((a,b) => a.distance - b.distance);
+
+  const topValueName = (sortBy === 'value' && sorted[0] && sorted[0].valueScore > 0) ? sorted[0].name : null;
+
+  list.innerHTML = sorted.map(p => {
+    const priceTxt = Array(p.priceLvl).fill('CHF').join(' ');
+    const openTxt = p.openNow === true ? '<span class="status-open">● Ouvert</span>' : (p.openNow === false ? '<span class="status-closed">● Fermé</span>' : '<span class="meta-txt">Horaires inconnus</span>');
+    const isTop = p.name === topValueName;
+    return `<div class="place-card ${isTop ? 'top-value' : ''}">
+      <div class="place-thumb">🍽️</div>
+      <div class="place-info">
+        <div class="place-name">${p.name}</div>
+        <div class="place-meta">
+          ${p.rating ? `<span class="rating">★ ${p.rating}</span><span class="dot-sep"></span><span class="meta-txt">${p.ratingCount} avis</span><span class="dot-sep"></span>` : '<span class="meta-txt">Pas encore noté</span>'}
+          <span class="meta-txt">${priceTxt}</span>
+        </div>
+        ${isTop ? '<div class="value-badge">🏆 Meilleur rapport qualité-prix</div>' : ''}
+        <div class="place-meta" style="margin-top:5px;">${openTxt}</div>
+        <div class="meta-txt" style="margin-top:3px;">${p.distance} m</div>
+      </div>
     </div>`;
   }).join('');
 }
