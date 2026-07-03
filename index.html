@@ -737,6 +737,10 @@ async function loadAroundScreen(){
   const agendaQuery = encodeURIComponent("agenda événements aujourd'hui " + lastAroundLabel);
 
   content.innerHTML = `
+    <p class="meta-txt" style="margin:0 20px 10px; font-family:'IBM Plex Mono',monospace;">
+      📍 Recherche autour de ${lat.toFixed(5)}, ${lon.toFixed(5)} —
+      <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" style="color:var(--lake);">vérifier sur Maps ↗</a>
+    </p>
     <div class="agenda-card">
       <div class="agenda-title">🔴 Ce qui se passe ici aujourd'hui</div>
       <div class="agenda-sub">Il n'existe pas de flux fiable et à jour pour les événements locaux en Suisse — plutôt que d'afficher une date qu'on ne peut pas garantir, voici un accès direct vers l'agenda le plus pertinent pour ce lieu.</div>
