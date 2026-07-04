@@ -976,10 +976,10 @@ async function refreshOneStationBoard(id, name, distance, coordinate){
         const minutesUntilDep = (new Date(j.stop.departure) - new Date()) / 60000;
         if(neededWalkMin > minutesUntilDep){
           unreachable = true;
-          reachNote = `<div style="padding:0 0 6px 91px; font-size:10.5px; color:var(--danger); font-family:'IBM Plex Mono',monospace;">⚠️ Trop juste à pied : ≈ ${neededWalkMin} min nécessaires, ${Math.max(0, Math.round(minutesUntilDep))} min restantes</div>`;
+          reachNote = `<div style="padding:0 0 6px 91px; font-size:10.5px; color:var(--amber); font-family:'IBM Plex Mono',monospace;">⚠️ Trop juste à pied : ≈ ${neededWalkMin} min nécessaires, ${Math.max(0, Math.round(minutesUntilDep))} min restantes</div>`;
         }
       }
-      const destStyle = unreachable ? 'color:var(--danger); font-weight:700;' : '';
+      const destStyle = unreachable ? 'color:var(--amber); font-weight:700;' : '';
 
       return `<div class="flap-row">
         <span class="${timeCls}">${t}</span>
