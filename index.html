@@ -861,21 +861,20 @@ async function loadStationScreen(forceRefresh){
     haversineMeters(lastGareSearchCoords.lat, lastGareSearchCoords.lon, freshCoords.lat, freshCoords.lon) > GARE_REFRESH_DISTANCE_M;
 
   if(verifiedGares.length === 0 || movedFar || forceRefresh){
-    // Étape 2 : coordonnées GPS → nom de la ville (géocodage inversé Google)
+    // Étape 2 : coordonnées GPS → nom de la ville (géocodage inversé OpenStreetMap Nominatim — gratuit, sans clé)
     board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Étape 2/3 — Identification de la ville (${freshCoords.lat.toFixed(4)}, ${freshCoords.lon.toFixed(4)})…</div>`;
     let cityName = null;
     try{
-      const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${freshCoords.lat},${freshCoords.lon}&language=fr&result_type=locality&key=${GOOGLE_MAPS_API_KEY}`);
-      const geoData = await geoRes.json();
-      bumpUsage('usage_places_calls');
-      if(geoData.status !== 'OK'){
-        board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Échec à l'étape 2 (identification de la ville) — statut Google : ${geoData.status}${geoData.error_message ? ' — ' + geoData.error_message : ''}. Vérifiez que "Geocoding API" est bien activée dans Google Cloud Console.</div>`;
+      const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${freshCoords.lat}&lon=${freshCoords.lon}&zoom=12&addressdetails=1&accept-language=fr`);
+      if(!geoRes.ok){
+        board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Échec à l'étape 2 — HTTP ${geoRes.status} depuis OpenStreetMap.</div>`;
         return;
       }
-      const locality = geoData.results?.[0]?.address_components?.find(c => c.types.includes('locality'));
-      cityName = locality ? locality.long_name : null;
+      const geoData = await geoRes.json();
+      const addr = geoData.address || {};
+      cityName = addr.city || addr.town || addr.municipality || addr.village || null;
       if(!cityName){
-        board.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Étape 2 réussie mais aucune ville identifiée à cette position précise (zone rurale ?).</div>';
+        board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Étape 2 réussie mais aucune ville identifiée à cette position précise. Champs reçus : ${Object.keys(addr).join(', ') || 'aucun'}.</div>`;
         return;
       }
     } catch(e){
