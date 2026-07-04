@@ -1237,21 +1237,54 @@ const CUISINE_TYPES = [
   { key: 'beef', label: '🥩 Beef', type: 'steak_house' }
 ];
 
-async function loadAroundScreen(){
-  document.getElementById('around-eyebrow').textContent = lastAroundLabel ? 'Restos autour de' : '—';
-  document.getElementById('around-title').textContent = lastAroundLabel || 'Aucune destination récente';
+let aroundMode = 'destination'; // 'destination' ou 'position'
+
+async function loadAroundScreen(mode){
+  if(mode) aroundMode = mode;
   const content = document.getElementById('around-content');
 
-  if(!lastAroundCoord){
-    content.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Recherchez d\'abord un trajet — les restaurants autour de votre destination s\'afficheront ici automatiquement.</div>';
-    return;
+  content.innerHTML = `
+    <div class="sort-row" id="around-mode-row">
+      <div class="chip ${aroundMode === 'destination' ? 'active' : ''}" data-mode="destination">🎯 Destination du trajet</div>
+      <div class="chip ${aroundMode === 'position' ? 'active' : ''}" data-mode="position">📍 Ma position actuelle</div>
+    </div>
+    <div id="around-body"></div>
+  `;
+
+  document.querySelectorAll('#around-mode-row .chip').forEach(chip => {
+    chip.addEventListener('click', () => loadAroundScreen(chip.dataset.mode));
+  });
+
+  const body = document.getElementById('around-body');
+
+  let lat, lon, label;
+  if(aroundMode === 'position'){
+    body.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Localisation en cours…</div>';
+    const fresh = await getFreshPosition();
+    if(!fresh){
+      body.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Localisation impossible — vérifiez que vous avez autorisé la position pour ce site.</div>';
+      return;
+    }
+    userCoords = fresh;
+    lat = fresh.lat; lon = fresh.lon; label = 'votre position actuelle';
+    document.getElementById('around-eyebrow').textContent = 'Restos autour de';
+    document.getElementById('around-title').textContent = 'Ma position actuelle';
+  } else {
+    if(!lastAroundCoord){
+      body.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Recherchez d\'abord un trajet — les restaurants autour de votre destination s\'afficheront ici automatiquement.</div>';
+      document.getElementById('around-eyebrow').textContent = '—';
+      document.getElementById('around-title').textContent = 'Aucune destination récente';
+      return;
+    }
+    lat = lastAroundCoord.x; lon = lastAroundCoord.y; label = lastAroundLabel;
+    document.getElementById('around-eyebrow').textContent = 'Restos autour de';
+    document.getElementById('around-title').textContent = lastAroundLabel;
   }
 
-  const lat = lastAroundCoord.x, lon = lastAroundCoord.y;
-  const agendaQuery = encodeURIComponent("agenda événements aujourd'hui " + lastAroundLabel);
+  const agendaQuery = encodeURIComponent("agenda événements aujourd'hui " + label);
 
-  content.innerHTML = `
-    <p class="meta-txt" style="margin:0 20px 10px; font-family:'IBM Plex Mono',monospace;">
+  body.innerHTML = `
+    <p class="meta-txt" style="margin:10px 20px 10px; font-family:'IBM Plex Mono',monospace;">
       📍 Recherche autour de ${lat.toFixed(5)}, ${lon.toFixed(5)} —
       <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" style="color:var(--lake);">vérifier sur Maps ↗</a>
     </p>
