@@ -390,7 +390,7 @@ function stopLiveMapTracking(){
 
 function showScreen(name){
   if(name !== 'detail') stopLiveMapTracking();
-  if(name !== 'station') stopStationBoardRefresh();
+  if(name !== 'station'){ stopStationBoardRefresh(); stopGareLocationWatch(); }
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + name).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -603,10 +603,10 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
           return;
         }
         if(!verifiedGares.some(g => g.id === s.id)){
-          verifiedGares.push({ id: s.id, name: s.name, distance: null });
+          verifiedGares.push({ id: s.id, name: s.name, distance: null, coordinate: s.coordinate });
           manualGares.push({ id: s.id, name: s.name, distance: null });
           board.insertAdjacentHTML('beforeend', `<div id="gare-board-${s.id}" style="margin-bottom:14px;"></div>`);
-          refreshOneStationBoard(s.id, s.name, null);
+          refreshOneStationBoard(s.id, s.name, null, s.coordinate);
         }
         document.getElementById(inputId).value = '';
         return;
@@ -920,15 +920,30 @@ async function loadStationScreen(forceRefresh){
   }
 
   board.innerHTML = verifiedGares.map(g => `<div id="gare-board-${g.id}" style="margin-bottom:14px;"></div>`).join('');
-  verifiedGares.forEach(g => refreshOneStationBoard(g.id, g.name, g.distance));
+  verifiedGares.forEach(g => refreshOneStationBoard(g.id, g.name, g.distance, g.coordinate));
 
   stopStationBoardRefresh();
   stationBoardInterval = setInterval(() => {
-    verifiedGares.forEach(g => refreshOneStationBoard(g.id, g.name, g.distance));
+    verifiedGares.forEach(g => refreshOneStationBoard(g.id, g.name, g.distance, g.coordinate));
   }, 20000);
+
+  startGareLocationWatch();
 }
 
-async function refreshOneStationBoard(id, name, distance){
+// Suivi GPS en direct pendant que l'écran Gare est ouvert, pour calculer si on peut encore attraper chaque train
+let gareWatchId = null;
+function startGareLocationWatch(){
+  stopGareLocationWatch();
+  if(!('geolocation' in navigator)) return;
+  gareWatchId = navigator.geolocation.watchPosition(pos => {
+    userCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+  }, () => {}, { enableHighAccuracy: true });
+}
+function stopGareLocationWatch(){
+  if(gareWatchId){ navigator.geolocation.clearWatch(gareWatchId); gareWatchId = null; }
+}
+
+async function refreshOneStationBoard(id, name, distance, coordinate){
   const slot = document.getElementById('gare-board-' + id);
   if(!slot) return;
   try{
@@ -951,13 +966,28 @@ async function refreshOneStationBoard(id, name, distance){
       const platform = j.stop.platform ? 'quai ' + j.stop.platform : '';
       const searchQuery = encodeURIComponent(`SBB CFF FFS ${j.category || ''} ${j.number || ''} horaire arrêts ${name}`);
       const searchUrl = `https://www.google.com/search?q=${searchQuery}`;
+
+      // Ce train est-il encore attrapable à pied depuis votre position actuelle ?
+      let unreachable = false;
+      let reachNote = '';
+      if(coordinate && userCoords){
+        const distM = haversineMeters(userCoords.lat, userCoords.lon, coordinate.x, coordinate.y);
+        const neededWalkMin = walkMinutes(distM);
+        const minutesUntilDep = (new Date(j.stop.departure) - new Date()) / 60000;
+        if(neededWalkMin > minutesUntilDep){
+          unreachable = true;
+          reachNote = `<div style="padding:0 0 6px 91px; font-size:10.5px; color:var(--danger); font-family:'IBM Plex Mono',monospace;">⚠️ Trop juste à pied : ≈ ${neededWalkMin} min nécessaires, ${Math.max(0, Math.round(minutesUntilDep))} min restantes</div>`;
+        }
+      }
+      const destStyle = unreachable ? 'color:var(--danger); font-weight:700;' : '';
+
       return `<div class="flap-row">
         <span class="${timeCls}">${t}</span>
         <div class="flap-mode mode-train">🚆</div>
         <span class="flap-line">${lineNum}</span>
-        <a href="${searchUrl}" target="_blank" class="flap-dest" style="text-decoration:underline; text-underline-offset:2px;">${j.to || ''} ↗</a>
+        <a href="${searchUrl}" target="_blank" class="flap-dest" style="text-decoration:underline; text-underline-offset:2px; ${destStyle}">${j.to || ''} ↗</a>
         ${badge}
-      </div>${platform ? `<div style="padding:0 0 6px 91px; font-size:10.5px; color:#8B93A0; font-family:'IBM Plex Mono',monospace;">${platform}</div>` : ''}`;
+      </div>${platform ? `<div style="padding:0 0 6px 91px; font-size:10.5px; color:#8B93A0; font-family:'IBM Plex Mono',monospace;">${platform}</div>` : ''}${reachNote}`;
     }).join('');
 
     slot.innerHTML = `<div class="flapboard"><div class="flap-header"><span>${name}${distTxt}</span><span>Temps réel</span></div>${rows}</div>`;
