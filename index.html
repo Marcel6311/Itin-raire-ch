@@ -861,12 +861,16 @@ async function loadStationScreen(forceRefresh){
     try{
       // On élargit largement (30 arrêts, pas 10) : dans une ville comme Lausanne, de nombreux
       // arrêts de bus/métro sont plus proches que la gare elle-même. Un rayon trop étroit la
-      // faisait passer à côté. On vérifie chaque candidat avant de l'afficher, comme avant.
+      // faisait passer à côté. Vérification UNE PAR UNE (pas en rafale, qui semble bloquer l'API),
+      // avec arrêt dès qu'on a trouvé 3 vraies gares pour rester rapide.
       const res = await fetch(`${API}/locations?x=${freshCoords.lat}&y=${freshCoords.lon}&type=station`);
       const data = await res.json();
       const candidates = (data.stations || []).filter(s => s.id).slice(0, 30);
-      const checks = await Promise.all(candidates.map(c => isRealTrainStation(c.id)));
-      const nearby = candidates.filter((c, i) => checks[i]);
+      const nearby = [];
+      for(let i = 0; i < candidates.length && nearby.length < 3; i++){
+        board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Vérification ${i+1}/${candidates.length} — ${candidates[i].name}…</div>`;
+        if(await isRealTrainStation(candidates[i].id)) nearby.push(candidates[i]);
+      }
 
       const merged = [...manualGares];
       nearby.forEach(n => { if(!merged.some(m => m.id === n.id)) merged.push(n); });
