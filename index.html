@@ -254,10 +254,11 @@
   <div class="screen" id="screen-station">
     <div class="back-row">
       <button class="back-btn" onclick="showScreen('home')">←</button>
-      <div style="min-width:0;">
+      <div style="min-width:0; flex:1;">
         <p class="eyebrow" style="margin:0;">🔴 Départs en direct</p>
         <h1 class="app-title" style="font-size:19px;">Gare</h1>
       </div>
+      <button class="back-btn" onclick="loadStationScreen(true)" title="Actualiser ma position">🔄</button>
     </div>
     <div class="card" style="position:relative;">
       <div class="field">
@@ -266,7 +267,7 @@
         <div class="autocomplete" id="autocomplete-station"></div>
       </div>
     </div>
-    <p class="value-note" style="margin:0 20px 10px;">Tableau des départs (trains uniquement), actualisé automatiquement toutes les 20 s. Il n'existe pas de tableau des arrivées séparé dans les données suisses officielles — comme sur les vrais écrans de gare, ce sont les départs qui comptent pour savoir où aller.</p>
+    <p class="value-note" style="margin:0 20px 10px;">Tableau des départs (trains uniquement), actualisé automatiquement toutes les 20 s. La position se remet à jour automatiquement si vous vous êtes déplacé de plus de 1,5 km (ex. après un trajet en train) — sinon, appuyez sur 🔄 pour forcer. Il n'existe pas de tableau des arrivées séparé dans les données suisses officielles — comme sur les vrais écrans de gare, ce sont les départs qui comptent pour savoir où aller.</p>
     <div id="station-board"></div>
   </div>
 
@@ -794,7 +795,9 @@ function renderResults(fromLabel, fromDistanceMeters){
 // affichent au moins un vrai train sont retenus et étiquetés "gare".
 let stationBoardInterval = null;
 let verifiedGares = []; // {id, name, distance}
+let lastGareSearchCoords = null; // {lat, lon} — position utilisée lors de la dernière recherche de gares
 const TRAIN_CATEGORIES = ['IC','IR','RE','R','EC','TGV','ICE','S','SN','EXT','NJ','TE2'];
+const GARE_REFRESH_DISTANCE_M = 1500; // au-delà, on considère qu'on a changé de secteur (ex. arrivée en train dans une autre ville)
 
 function stopStationBoardRefresh(){
   if(stationBoardInterval){ clearInterval(stationBoardInterval); stationBoardInterval = null; }
@@ -808,18 +811,37 @@ async function isRealTrainStation(id){
   } catch(e){ return false; }
 }
 
-async function loadStationScreen(){
+function getFreshPosition(){
+  return new Promise((resolve) => {
+    if(!('geolocation' in navigator)){ resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  });
+}
+
+async function loadStationScreen(forceRefresh){
   setupAutocomplete('input-station', 'autocomplete-station', 'stationboard');
   const board = document.getElementById('station-board');
+  board.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Localisation en cours…</div>';
 
-  if(verifiedGares.length === 0 && userCoords){
+  const freshCoords = await getFreshPosition();
+  if(freshCoords) userCoords = freshCoords;
+
+  const movedFar = lastGareSearchCoords && freshCoords &&
+    haversineMeters(lastGareSearchCoords.lat, lastGareSearchCoords.lon, freshCoords.lat, freshCoords.lon) > GARE_REFRESH_DISTANCE_M;
+
+  if((verifiedGares.length === 0 || movedFar || forceRefresh) && freshCoords){
     board.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Recherche des gares à proximité (vérification en cours)…</div>';
     try{
-      const res = await fetch(`${API}/locations?x=${userCoords.lat}&y=${userCoords.lon}&type=station`);
+      const res = await fetch(`${API}/locations?x=${freshCoords.lat}&y=${freshCoords.lon}&type=station`);
       const data = await res.json();
       const candidates = (data.stations || []).filter(s => s.id).slice(0, 10);
       const checks = await Promise.all(candidates.map(c => isRealTrainStation(c.id)));
       verifiedGares = candidates.filter((c, i) => checks[i]);
+      lastGareSearchCoords = freshCoords;
     } catch(e){ /* silencieux, on retombe sur le message ci-dessous */ }
   }
 
