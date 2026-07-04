@@ -291,11 +291,24 @@
     <div id="station-board"></div>
   </div>
 
+  <div class="screen" id="screen-shop">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('home')">←</button>
+      <div style="min-width:0; flex:1;">
+        <p class="eyebrow" style="margin:0;">🛒 Commerces autour de vous</p>
+        <h1 class="app-title" style="font-size:19px;">Magasin</h1>
+      </div>
+      <button class="back-btn" onclick="loadShopScreen()" title="Actualiser ma position">🔄</button>
+    </div>
+    <div id="shop-content"></div>
+  </div>
+
   <div class="bottom-nav">
     <button class="nav-item active" data-nav="home" onclick="showScreen('home')"><span class="ic">🧭</span>Trajet</button>
     <button class="nav-item" data-nav="around" onclick="showScreen('around')"><span class="ic">🍽️</span>Restos</button>
     <button class="nav-item" data-nav="visit" onclick="showScreen('visit')"><span class="ic">🏛️</span>À voir</button>
     <button class="nav-item" data-nav="station" onclick="showScreen('station')"><span class="ic">🚉</span>Gare</button>
+    <button class="nav-item" data-nav="shop" onclick="showScreen('shop')"><span class="ic">🛒</span>Magasin</button>
   </div>
 </div>
 
@@ -422,6 +435,7 @@ function showScreen(name){
   if(name === 'around') loadAroundScreen();
   if(name === 'visit') loadVisitScreen();
   if(name === 'station') loadStationScreen();
+  if(name === 'shop') loadShopScreen();
 }
 
 // Distance à vol d'oiseau (Haversine) — utilisée uniquement pour estimer un temps de marche indicatif
@@ -1126,6 +1140,87 @@ async function refreshOneStationBoard(id, name, distance, coordinate){
 }
 
 // ---------- Écran "Autour" : restaurants réels (Google Places) + agenda officiel ----------
+// ---------- Écran "Magasin" : commerces réels autour de la position actuelle (pas d'une destination) ----------
+async function loadShopScreen(){
+  const content = document.getElementById('shop-content');
+  content.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Localisation en cours…</div>';
+
+  const freshCoords = await getFreshPosition();
+  if(!freshCoords){
+    content.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Localisation impossible — vérifiez que vous avez autorisé la position pour ce site.</div>';
+    return;
+  }
+  userCoords = freshCoords;
+  const lat = freshCoords.lat, lon = freshCoords.lon;
+
+  content.innerHTML = `
+    <p class="meta-txt" style="margin:0 20px 10px; font-family:'IBM Plex Mono',monospace;">
+      📍 Recherche autour de ${lat.toFixed(5)}, ${lon.toFixed(5)} —
+      <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" style="color:var(--lake);">vérifier sur Maps ↗</a>
+    </p>
+    <p class="value-note" style="margin:10px 20px 12px;">Commerces dans un rayon de 500 m autour de votre position réelle, triés par distance.</p>
+    <div id="shop-list"><div class="flap-loading" style="padding:0 20px;">Recherche des commerces à proximité…</div></div>
+  `;
+
+  const list = document.getElementById('shop-list');
+  try{
+    const res = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.rating,places.userRatingCount,places.currentOpeningHours.openNow,places.location'
+      },
+      body: JSON.stringify({
+        includedTypes: ['supermarket', 'grocery_store', 'convenience_store'],
+        maxResultCount: 16,
+        rankPreference: 'DISTANCE',
+        locationRestriction: { circle: { center: { latitude: lat, longitude: lon }, radius: 500.0 } }
+      })
+    });
+    const data = await res.json();
+    if(data.error){
+      list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur Google Places : ${data.error.message || 'raison inconnue'} (code ${data.error.status || res.status}).</div>`;
+      return;
+    }
+    const shops = (data.places || []).map(p => {
+      const dist = Math.round(haversineMeters(lat, lon, p.location.latitude, p.location.longitude));
+      return {
+        id: p.id,
+        name: p.displayName ? p.displayName.text : 'Commerce',
+        rating: p.rating || null,
+        ratingCount: p.userRatingCount || 0,
+        openNow: p.currentOpeningHours ? p.currentOpeningHours.openNow : null,
+        distance: dist
+      };
+    }).sort((a,b) => a.distance - b.distance);
+
+    bumpUsage('usage_places_calls');
+
+    if(shops.length === 0){
+      list.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Aucun commerce trouvé dans un rayon de 500 m.</div>';
+      return;
+    }
+
+    list.innerHTML = shops.map(s => {
+      const openTxt = s.openNow === true ? '<span class="status-open">● Ouvert</span>' : (s.openNow === false ? '<span class="status-closed">● Fermé</span>' : '<span class="meta-txt">Horaires inconnus</span>');
+      return `<div class="place-card" onclick="openPlaceDetail('${s.id}')" style="cursor:pointer;">
+        <div class="place-thumb" style="background:var(--leaf-dim);">🛒</div>
+        <div class="place-info">
+          <div class="place-name">${s.name}</div>
+          <div class="place-meta">
+            ${s.rating ? `<span class="rating">★ ${s.rating}</span><span class="dot-sep"></span><span class="meta-txt">${s.ratingCount} avis</span>` : '<span class="meta-txt">Pas encore noté</span>'}
+          </div>
+          <div class="place-meta" style="margin-top:5px;">${openTxt}</div>
+          <div class="meta-txt" style="margin-top:3px;">${s.distance} m · toucher pour en savoir plus</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e){
+    list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Impossible de charger les commerces : ${e.message || e}.</div>`;
+  }
+}
+
 const PRICE_LEVEL_MAP = {
   PRICE_LEVEL_FREE: 1, PRICE_LEVEL_INEXPENSIVE: 1, PRICE_LEVEL_MODERATE: 2,
   PRICE_LEVEL_EXPENSIVE: 3, PRICE_LEVEL_VERY_EXPENSIVE: 4
