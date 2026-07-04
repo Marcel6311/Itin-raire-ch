@@ -277,7 +277,6 @@
 <script>
 const API = 'https://transport.opendata.ch/v1';
 const GOOGLE_MAPS_API_KEY = 'AIzaSyA4bGraPQ65Dp1b6Ph2FXc9y3W8u_LsPgw'; // même clé que le script Maps chargé en tête de page
-const OPENTRIPMAP_API_KEY = 'COLLE_TA_CLE_OPENTRIPMAP_ICI'; // à remplacer — clé gratuite sur dev.opentripmap.org/register
 let userCoords = null;      // {lat, lon}
 let nearbyStations = [];    // list from /locations
 let selectedDestination = null; // {id, name, coordinate}
@@ -865,35 +864,50 @@ async function loadVisitScreen(){
       📍 Recherche autour de ${lat.toFixed(5)}, ${lon.toFixed(5)} —
       <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" style="color:var(--lake);">vérifier sur Maps ↗</a>
     </p>
-    <p class="value-note" style="margin-top:10px;">Sites et monuments issus d'OpenStreetMap et Wikipedia (base ouverte OpenTripMap) — triés par importance touristique.</p>
+    <p class="value-note" style="margin-top:10px;">Sites et lieux référencés sur Wikipedia à proximité, triés par distance.</p>
     <div id="around-attractions-list"><div class="flap-loading" style="padding:0 20px;">Recherche des sites à proximité…</div></div>
   `;
   loadAttractions(lat, lon);
 }
 
-let aroundAttractions = [];
+let aroundAttractions = []; // cache local {pageid, title, dist, extract, thumbnail, lat, lon}
 
 async function loadAttractions(lat, lon){
   const list = document.getElementById('around-attractions-list');
   try{
-    const res = await fetch(`https://api.opentripmap.com/0.1/fr/places/radius?radius=800&lon=${lon}&lat=${lat}&rate=2&kinds=interesting_places&format=json&limit=12&apikey=${OPENTRIPMAP_API_KEY}`);
-    const data = await res.json();
-    if(data.error){
-      list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur OpenTripMap : ${data.error} — vérifie ta clé API dans le code.</div>`;
+    // Étape 1 : sites Wikipedia à proximité, avec distance (API MediaWiki, gratuite, sans clé)
+    const geoRes = await fetch(`https://fr.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}|${lon}&gsradius=800&gslimit=15&format=json&origin=*`);
+    const geoData = await geoRes.json();
+    const results = geoData.query?.geosearch || [];
+    if(results.length === 0){
+      list.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Aucun site notable trouvé dans un rayon de 800 m sur Wikipedia.</div>';
       return;
     }
-    aroundAttractions = (Array.isArray(data) ? data : []).filter(p => p.name);
-    if(aroundAttractions.length === 0){
-      list.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Aucun site notable trouvé dans un rayon de 800 m.</div>';
-      return;
-    }
-    aroundAttractions.sort((a,b) => (b.rate || 0) - (a.rate || 0));
+
+    // Étape 2 : résumé + photo pour ces pages, en un seul appel groupé
+    const ids = results.map(r => r.pageid).join('|');
+    const detailRes = await fetch(`https://fr.wikipedia.org/w/api.php?action=query&pageids=${ids}&prop=extracts|pageimages&exintro=1&explaintext=1&exchars=400&piprop=thumbnail&pithumbsize=400&format=json&origin=*`);
+    const detailData = await detailRes.json();
+    const pages = detailData.query?.pages || {};
+
+    aroundAttractions = results.map(r => {
+      const d = pages[r.pageid] || {};
+      return {
+        pageid: r.pageid,
+        title: r.title,
+        dist: Math.round(r.dist || 0),
+        lat: r.lat, lon: r.lon,
+        extract: d.extract || '',
+        thumbnail: d.thumbnail?.source || null
+      };
+    });
+
     list.innerHTML = aroundAttractions.map(p => `
-      <div class="place-card" onclick="openAttractionDetail('${p.xid}')" style="cursor:pointer;">
-        <div class="place-thumb" style="background:var(--lake-dim);">🏛️</div>
+      <div class="place-card" onclick="openAttractionDetail(${p.pageid})" style="cursor:pointer;">
+        <div class="place-thumb" style="background:var(--lake-dim); ${p.thumbnail ? `background-image:url('${p.thumbnail}'); background-size:cover; background-position:center;` : ''}">${p.thumbnail ? '' : '🏛️'}</div>
         <div class="place-info">
-          <div class="place-name">${p.name}</div>
-          <div class="meta-txt" style="margin-top:3px;">${Math.round(p.dist || 0)} m · toucher pour en savoir plus</div>
+          <div class="place-name">${p.title}</div>
+          <div class="meta-txt" style="margin-top:3px;">${p.dist} m · toucher pour en savoir plus</div>
         </div>
       </div>
     `).join('');
@@ -902,35 +916,29 @@ async function loadAttractions(lat, lon){
   }
 }
 
-async function openAttractionDetail(xid){
+function openAttractionDetail(pageid){
   const modal = document.getElementById('place-detail-modal');
   const body = document.getElementById('place-detail-body');
+  const p = aroundAttractions.find(a => a.pageid === pageid);
   modal.classList.add('show');
-  body.innerHTML = '<div class="flap-loading" style="padding:20px;">Chargement de la fiche…</div>';
 
-  try{
-    const res = await fetch(`https://api.opentripmap.com/0.1/fr/places/xid/${xid}?apikey=${OPENTRIPMAP_API_KEY}`);
-    const p = await res.json();
-    if(p.error){
-      body.innerHTML = `<div class="flap-empty" style="padding:20px;">Erreur : ${p.error}</div>`;
-      return;
-    }
-    const desc = p.wikipedia_extracts?.text || "Pas de description disponible pour ce lieu.";
-    const imgHtml = p.preview?.source ? `<img src="${p.preview.source}" style="width:100%; border-radius:12px; margin-bottom:12px;">` : '';
-    body.innerHTML = `
-      ${imgHtml}
-      <h2 class="app-title" style="font-size:19px; margin-bottom:6px;">${p.name || 'Site'}</h2>
-      ${p.address?.road ? `<div class="meta-txt" style="margin-bottom:10px;">📍 ${[p.address.road, p.address.city].filter(Boolean).join(', ')}</div>` : ''}
-      <p class="meta-txt" style="line-height:1.5;">${desc}</p>
-      <div style="display:flex; gap:8px; margin-top:16px;">
-        ${p.point ? `<a href="https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=${p.point.lat},${p.point.lon}" target="_blank" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">🗺️ Itinéraire à pied</a>` : ''}
-        ${p.wikipedia ? `<a href="${p.wikipedia}" target="_blank" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">📖 Wikipedia</a>` : ''}
-      </div>
-      <p class="meta-txt" style="margin-top:14px; line-height:1.4;">ⓘ Données ouvertes OpenStreetMap / Wikipedia via OpenTripMap — pas un guide éditorialisé, informations parfois incomplètes selon les contributions.</p>
-    `;
-  } catch(e){
-    body.innerHTML = `<div class="flap-empty" style="padding:20px;">Impossible de charger la fiche : ${e.message || e}</div>`;
+  if(!p){
+    body.innerHTML = '<div class="flap-empty" style="padding:20px;">Fiche introuvable.</div>';
+    return;
   }
+
+  const imgHtml = p.thumbnail ? `<img src="${p.thumbnail}" style="width:100%; border-radius:12px; margin-bottom:12px;">` : '';
+  const wikiUrl = `https://fr.wikipedia.org/wiki/${encodeURIComponent(p.title.replace(/ /g, '_'))}`;
+  body.innerHTML = `
+    ${imgHtml}
+    <h2 class="app-title" style="font-size:19px; margin-bottom:8px;">${p.title}</h2>
+    <p class="meta-txt" style="line-height:1.5;">${p.extract || "Pas de description disponible pour ce lieu."}</p>
+    <div style="display:flex; gap:8px; margin-top:16px;">
+      <a href="https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=${p.lat},${p.lon}" target="_blank" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">🗺️ Itinéraire à pied</a>
+      <a href="${wikiUrl}" target="_blank" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">📖 Wikipedia</a>
+    </div>
+    <p class="meta-txt" style="margin-top:14px; line-height:1.4;">ⓘ Source : Wikipedia (contenu ouvert, licence Creative Commons) — pas un guide éditorialisé, informations parfois incomplètes selon les contributions.</p>
+  `;
 }
 
 function renderAroundPlaces(sortBy){
