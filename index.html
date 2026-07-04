@@ -972,6 +972,16 @@ const PRICE_LEVEL_MAP = {
   PRICE_LEVEL_EXPENSIVE: 3, PRICE_LEVEL_VERY_EXPENSIVE: 4
 };
 
+const CUISINE_TYPES = [
+  { key: 'all', label: '🍽️ Tous', type: 'restaurant' },
+  { key: 'italian', label: '🍝 Italien', type: 'italian_restaurant' },
+  { key: 'japanese', label: '🍣 Japonais', type: 'japanese_restaurant' },
+  { key: 'burger', label: '🍔 Burger', type: 'hamburger_restaurant' },
+  { key: 'pizza', label: '🍕 Pizza', type: 'pizza_restaurant' },
+  { key: 'chinese', label: '🥡 Chinois', type: 'chinese_restaurant' },
+  { key: 'indian', label: '🍛 Indien', type: 'indian_restaurant' }
+];
+
 async function loadAroundScreen(){
   document.getElementById('around-eyebrow').textContent = lastAroundLabel ? 'Restos autour de' : '—';
   document.getElementById('around-title').textContent = lastAroundLabel || 'Aucune destination récente';
@@ -996,6 +1006,10 @@ async function loadAroundScreen(){
       <a class="agenda-link" href="https://www.google.com/search?q=${agendaQuery}" target="_blank">Voir l'agenda ↗</a>
     </div>
 
+    <div class="sort-row" id="cuisine-row">
+      ${CUISINE_TYPES.map((c, i) => `<div class="chip ${i === 0 ? 'active' : ''}" data-cuisine="${c.type}">${c.label}</div>`).join('')}
+    </div>
+
     <div class="sort-row">
       <div class="chip active" data-sort="value">⭐ Qualité-prix</div>
       <div class="chip" data-sort="rating">🏅 Mieux noté</div>
@@ -1005,6 +1019,14 @@ async function loadAroundScreen(){
     <div id="around-places-list"><div class="flap-loading" style="padding:0 20px;">Recherche des restaurants à proximité…</div></div>
   `;
 
+  document.querySelectorAll('#cuisine-row .chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('#cuisine-row .chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      searchRestaurants(lat, lon, chip.dataset.cuisine);
+    });
+  });
+
   document.querySelectorAll('.sort-row .chip[data-sort]').forEach(chip => {
     chip.addEventListener('click', () => {
       document.querySelectorAll('.sort-row .chip[data-sort]').forEach(c => c.classList.remove('active'));
@@ -1013,6 +1035,12 @@ async function loadAroundScreen(){
     });
   });
 
+  searchRestaurants(lat, lon, 'restaurant');
+}
+
+async function searchRestaurants(lat, lon, cuisineType){
+  const list = document.getElementById('around-places-list');
+  list.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Recherche des restaurants à proximité…</div>';
   try{
     const res = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
       method: 'POST',
@@ -1022,14 +1050,14 @@ async function loadAroundScreen(){
         'X-Goog-FieldMask': 'places.id,places.displayName,places.rating,places.userRatingCount,places.priceLevel,places.currentOpeningHours.openNow,places.location'
       },
       body: JSON.stringify({
-        includedTypes: ['restaurant'],
+        includedTypes: [cuisineType],
         maxResultCount: 14,
         locationRestriction: { circle: { center: { latitude: lat, longitude: lon }, radius: 500.0 } }
       })
     });
     const data = await res.json();
     if(data.error){
-      document.getElementById('around-places-list').innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur Google Places : ${data.error.message || 'raison inconnue'} (code ${data.error.status || res.status}).</div>`;
+      list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur Google Places : ${data.error.message || 'raison inconnue'} (code ${data.error.status || res.status}).</div>`;
       return;
     }
     aroundPlaces = (data.places || []).map(p => {
@@ -1050,12 +1078,13 @@ async function loadAroundScreen(){
     bumpUsage('usage_places_calls');
 
     if(aroundPlaces.length === 0){
-      document.getElementById('around-places-list').innerHTML = '<div class="flap-empty" style="padding:0 20px;">Aucun restaurant trouvé dans un rayon de 500 m.</div>';
+      list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Aucun résultat pour cette catégorie dans un rayon de 500 m — essayez "Tous" ou élargissez votre recherche.</div>`;
       return;
     }
-    renderAroundPlaces('value');
+    const activeSort = document.querySelector('.sort-row .chip[data-sort].active')?.dataset.sort || 'value';
+    renderAroundPlaces(activeSort);
   } catch(e){
-    document.getElementById('around-places-list').innerHTML = `<div class="flap-empty" style="padding:0 20px;">Impossible de charger les restaurants : ${e.message || e}.</div>`;
+    list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Impossible de charger les restaurants : ${e.message || e}.</div>`;
   }
 }
 
