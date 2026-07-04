@@ -251,10 +251,30 @@
     <div id="visit-content"></div>
   </div>
 
+  <div class="screen" id="screen-station">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('home')">←</button>
+      <div style="min-width:0;">
+        <p class="eyebrow" style="margin:0;">🔴 Départs en direct</p>
+        <h1 class="app-title" style="font-size:19px;">Gare</h1>
+      </div>
+    </div>
+    <div class="card" style="position:relative;">
+      <div class="field">
+        <div class="dot dot-from"></div>
+        <input type="text" id="input-station" placeholder="Nom de la gare" autocomplete="off">
+        <div class="autocomplete" id="autocomplete-station"></div>
+      </div>
+    </div>
+    <p class="value-note" style="margin:0 20px 10px;">Tableau des départs (trains uniquement), actualisé automatiquement toutes les 20 s. Il n'existe pas de tableau des arrivées séparé dans les données suisses officielles — comme sur les vrais écrans de gare, ce sont les départs qui comptent pour savoir où aller.</p>
+    <div id="station-board"></div>
+  </div>
+
   <div class="bottom-nav">
     <button class="nav-item active" data-nav="home" onclick="showScreen('home')"><span class="ic">🧭</span>Trajet</button>
     <button class="nav-item" data-nav="around" onclick="showScreen('around')"><span class="ic">🍽️</span>Restos</button>
     <button class="nav-item" data-nav="visit" onclick="showScreen('visit')"><span class="ic">🏛️</span>À voir</button>
+    <button class="nav-item" data-nav="station" onclick="showScreen('station')"><span class="ic">🚉</span>Gare</button>
   </div>
 </div>
 
@@ -369,6 +389,7 @@ function stopLiveMapTracking(){
 
 function showScreen(name){
   if(name !== 'detail') stopLiveMapTracking();
+  if(name !== 'station') stopStationBoardRefresh();
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + name).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -378,6 +399,7 @@ function showScreen(name){
   window.scrollTo(0,0);
   if(name === 'around') loadAroundScreen();
   if(name === 'visit') loadVisitScreen();
+  if(name === 'station') loadStationScreen();
 }
 
 // Distance à vol d'oiseau (Haversine) — utilisée uniquement pour estimer un temps de marche indicatif
@@ -507,7 +529,8 @@ function setupAutocomplete(inputId, boxId, kind){
   input.addEventListener('input', () => {
     clearTimeout(timer);
     const q = input.value.trim();
-    if(kind === 'origin') selectedOrigin = null; else selectedDestination = null;
+    if(kind === 'origin') selectedOrigin = null;
+    else if(kind === 'destination') selectedDestination = null;
     if(q.length < 2){ document.getElementById(boxId).classList.remove('show'); return; }
     timer = setTimeout(() => fetchAutocomplete(q, boxId, inputId, kind), 300);
   });
@@ -523,7 +546,7 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
     stationItems = (data.stations || []).filter(s => s.id).slice(0, 4);
   } catch(e){}
 
-  // La recherche de lieux (restaurants, commerces...) n'a de sens que pour le champ destination
+  // La recherche de lieux (restaurants, commerces...) n'a de sens que pour le champ destination de trajet
   let placeItems = [];
   if(kind === 'destination' && window.google && google.maps && google.maps.places){
     try{
@@ -561,6 +584,15 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
 
       if(kind === 'origin'){
         selectedOrigin = { id: s.id, name: s.name, coordinate: s.coordinate };
+        return;
+      }
+
+      if(kind === 'stationboard'){
+        stationBoardId = s.id;
+        stationBoardName = s.name;
+        refreshStationBoard();
+        stopStationBoardRefresh();
+        stationBoardInterval = setInterval(refreshStationBoard, 20000);
         return;
       }
 
@@ -745,6 +777,71 @@ function renderResults(fromLabel, fromDistanceMeters){
       <div class="trip-legs">${legsHtml.join('')}</div>
     </div>`;
   }).join('');
+}
+
+// ---------- Écran "Gare" : tableau des départs trains en direct, avec retards ----------
+let stationBoardId = null, stationBoardName = '';
+let stationBoardInterval = null;
+const TRAIN_CATEGORIES = ['IC','IR','RE','R','EC','TGV','ICE','S','SN','EXT','NJ','TE2'];
+
+function stopStationBoardRefresh(){
+  if(stationBoardInterval){ clearInterval(stationBoardInterval); stationBoardInterval = null; }
+}
+
+async function loadStationScreen(){
+  const input = document.getElementById('input-station');
+
+  // Pré-remplit avec l'arrêt le plus proche détecté par géolocalisation, modifiable ensuite
+  if(!stationBoardId && nearbyStations.length > 0){
+    stationBoardId = nearbyStations[0].id;
+    stationBoardName = nearbyStations[0].name;
+    input.value = stationBoardName;
+  }
+
+  setupAutocomplete('input-station', 'autocomplete-station', 'stationboard');
+
+  if(stationBoardId){
+    refreshStationBoard();
+    stopStationBoardRefresh();
+    stationBoardInterval = setInterval(refreshStationBoard, 20000);
+  } else {
+    document.getElementById('station-board').innerHTML = '<div class="flap-empty" style="padding:0 20px;">Indiquez une gare ci-dessus, ou activez la localisation depuis l\'onglet Trajet.</div>';
+  }
+}
+
+async function refreshStationBoard(){
+  const board = document.getElementById('station-board');
+  if(!stationBoardId) return;
+  try{
+    const res = await fetch(`${API}/stationboard?id=${stationBoardId}&limit=25`);
+    const data = await res.json();
+    const trains = (data.stationboard || []).filter(j => TRAIN_CATEGORIES.includes((j.category || '').toUpperCase())).slice(0, 12);
+
+    if(trains.length === 0){
+      board.innerHTML = `<div class="flapboard"><div class="flap-header"><span>${stationBoardName}</span><span>Temps réel</span></div><div class="flap-empty">Aucun train trouvé à cet arrêt — vérifiez qu'il s'agit bien d'une gare (pas un arrêt de bus).</div></div>`;
+      return;
+    }
+
+    const rows = trains.map(j => {
+      const delay = computeDelayMin(j.stop);
+      const timeCls = delay > 0 ? 'flap-time delay' : 'flap-time';
+      const badge = delay > 0 ? `<span class="flap-badge badge-delay">+${delay} min</span>` : `<span class="flap-badge badge-ontime">à l'heure</span>`;
+      const t = fmtTime(j.stop.departure);
+      const lineNum = j.number || j.category || '';
+      const platform = j.stop.platform ? 'quai ' + j.stop.platform : '';
+      return `<div class="flap-row">
+        <span class="${timeCls}">${t}</span>
+        <div class="flap-mode mode-train">🚆</div>
+        <span class="flap-line">${lineNum}</span>
+        <span class="flap-dest">${j.to || ''}</span>
+        ${badge}
+      </div>${platform ? `<div style="padding:0 0 6px 91px; font-size:10.5px; color:#8B93A0; font-family:'IBM Plex Mono',monospace;">${platform}</div>` : ''}`;
+    }).join('');
+
+    board.innerHTML = `<div class="flapboard"><div class="flap-header"><span>${stationBoardName}</span><span>Temps réel</span></div>${rows}</div>`;
+  } catch(e){
+    board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Impossible de charger le tableau : ${e.message || e}</div>`;
+  }
 }
 
 // ---------- Écran "Autour" : restaurants réels (Google Places) + agenda officiel ----------
