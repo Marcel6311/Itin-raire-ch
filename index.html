@@ -949,11 +949,13 @@ async function refreshOneStationBoard(id, name, distance){
       const t = fmtTime(j.stop.departure);
       const lineNum = j.number || j.category || '';
       const platform = j.stop.platform ? 'quai ' + j.stop.platform : '';
+      const searchQuery = encodeURIComponent(`SBB CFF FFS ${j.category || ''} ${j.number || ''} horaire arrêts ${name}`);
+      const searchUrl = `https://www.google.com/search?q=${searchQuery}`;
       return `<div class="flap-row">
         <span class="${timeCls}">${t}</span>
         <div class="flap-mode mode-train">🚆</div>
         <span class="flap-line">${lineNum}</span>
-        <span class="flap-dest">${j.to || ''}</span>
+        <a href="${searchUrl}" target="_blank" class="flap-dest" style="text-decoration:underline; text-underline-offset:2px;">${j.to || ''} ↗</a>
         ${badge}
       </div>${platform ? `<div style="padding:0 0 6px 91px; font-size:10.5px; color:#8B93A0; font-family:'IBM Plex Mono',monospace;">${platform}</div>` : ''}`;
     }).join('');
