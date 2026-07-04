@@ -435,6 +435,34 @@ function haversineMeters(lat1, lon1, lat2, lon2){
 }
 function walkMinutes(meters){ return Math.max(1, Math.round(meters / 80)); } // ~4.8 km/h
 
+// Calcule, pour un départ donné, si on peut encore l'attraper à pied depuis la position actuelle,
+// et surtout À QUELLE HEURE il faut partir — plus utile qu'un simple "trop juste" après coup.
+function getReachability(coordinate, departureIso){
+  if(!coordinate || !userCoords) return null;
+  const distM = haversineMeters(userCoords.lat, userCoords.lon, coordinate.x, coordinate.y);
+  const neededWalkMin = walkMinutes(distM);
+  const depTime = new Date(departureIso);
+  const minutesUntilDep = (depTime - new Date()) / 60000;
+  const slack = minutesUntilDep - neededWalkMin;
+  const leaveBy = new Date(depTime.getTime() - neededWalkMin * 60000);
+  let status = 'ok';
+  if(slack < 0) status = 'unreachable';
+  else if(slack < 2) status = 'urgent';
+  return { status, neededWalkMin, minutesUntilDep: Math.max(0, Math.round(minutesUntilDep)), leaveByTxt: fmtTime(leaveBy.toISOString()) };
+}
+
+function reachabilityNoteHtml(r, indent){
+  if(!r) return '';
+  const pad = indent || 91;
+  if(r.status === 'unreachable'){
+    return `<div style="padding:0 0 6px ${pad}px; font-size:10.5px; color:var(--amber); font-family:'IBM Plex Mono',monospace;">⚠️ Trop juste : ≈ ${r.neededWalkMin} min de marche, ${r.minutesUntilDep} min restantes</div>`;
+  }
+  if(r.status === 'urgent'){
+    return `<div style="padding:0 0 6px ${pad}px; font-size:10.5px; color:var(--coral); font-family:'IBM Plex Mono',monospace; font-weight:600;">🏃 Partez maintenant pour l'attraper !</div>`;
+  }
+  return `<div style="padding:0 0 6px ${pad}px; font-size:10.5px; color:var(--leaf); font-family:'IBM Plex Mono',monospace;">✅ Partez avant ${r.leaveByTxt} pour l'attraper</div>`;
+}
+
 function iconForCategory(cat){
   if(!cat) return {icon:'🚌', cls:'mode-bus'};
   const c = cat.toUpperCase();
@@ -551,19 +579,10 @@ async function renderStationGroup(station){
       const t = fmtTime(j.stop.departure);
       const lineNum = j.number || j.category || '';
 
-      // Attrapable à pied depuis votre position actuelle ?
-      let unreachable = false;
-      let reachNote = '';
-      if(station.coordinate && userCoords){
-        const distM = haversineMeters(userCoords.lat, userCoords.lon, station.coordinate.x, station.coordinate.y);
-        const neededWalkMin = walkMinutes(distM);
-        const minutesUntilDep = (new Date(j.stop.departure) - new Date()) / 60000;
-        if(neededWalkMin > minutesUntilDep){
-          unreachable = true;
-          reachNote = `<div style="padding:0 0 5px 91px; font-size:10px; color:var(--amber); font-family:'IBM Plex Mono',monospace;">⚠️ Trop juste : ≈ ${neededWalkMin} min de marche, ${Math.max(0, Math.round(minutesUntilDep))} min restantes</div>`;
-        }
-      }
-      const destStyle = unreachable ? 'color:var(--amber); font-weight:700;' : '';
+      // Attrapable à pied depuis votre position actuelle ? Et si oui, avant quelle heure faut-il partir ?
+      const r = getReachability(station.coordinate, j.stop.departure);
+      const reachNote = reachabilityNoteHtml(r);
+      const destStyle = r?.status === 'unreachable' ? 'color:var(--amber); font-weight:700;' : (r?.status === 'urgent' ? 'color:var(--coral); font-weight:700;' : '');
 
       return `<div class="flap-row">
         <span class="${timeCls}">${t}</span>
@@ -1086,19 +1105,10 @@ async function refreshOneStationBoard(id, name, distance, coordinate){
       const searchQuery = encodeURIComponent(`SBB CFF FFS ${j.category || ''} ${j.number || ''} horaire arrêts ${name}`);
       const searchUrl = `https://www.google.com/search?q=${searchQuery}`;
 
-      // Ce train est-il encore attrapable à pied depuis votre position actuelle ?
-      let unreachable = false;
-      let reachNote = '';
-      if(coordinate && userCoords){
-        const distM = haversineMeters(userCoords.lat, userCoords.lon, coordinate.x, coordinate.y);
-        const neededWalkMin = walkMinutes(distM);
-        const minutesUntilDep = (new Date(j.stop.departure) - new Date()) / 60000;
-        if(neededWalkMin > minutesUntilDep){
-          unreachable = true;
-          reachNote = `<div style="padding:0 0 6px 91px; font-size:10.5px; color:var(--amber); font-family:'IBM Plex Mono',monospace;">⚠️ Trop juste à pied : ≈ ${neededWalkMin} min nécessaires, ${Math.max(0, Math.round(minutesUntilDep))} min restantes</div>`;
-        }
-      }
-      const destStyle = unreachable ? 'color:var(--amber); font-weight:700;' : '';
+      // Ce train est-il encore attrapable à pied ? Et si oui, avant quelle heure faut-il partir ?
+      const r = getReachability(coordinate, j.stop.departure);
+      const reachNote = reachabilityNoteHtml(r);
+      const destStyle = r?.status === 'unreachable' ? 'color:var(--amber); font-weight:700;' : (r?.status === 'urgent' ? 'color:var(--coral); font-weight:700;' : '');
 
       return `<div class="flap-row">
         <span class="${timeCls}">${t}</span>
