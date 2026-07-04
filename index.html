@@ -180,13 +180,13 @@
     <div class="card">
       <div class="field">
         <div class="dot dot-from"></div>
-        <input type="text" id="input-from" placeholder="Point de départ" value="Ma position actuelle" autocomplete="off">
+        <input type="text" id="input-from" placeholder="Point de départ" value="Ma position actuelle" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" name="depart-libre">
         <button class="geo-btn" onclick="useCurrentLocation()">◎</button>
         <div class="autocomplete" id="autocomplete-from"></div>
       </div>
       <div class="field">
         <div class="dot dot-to"></div>
-        <input type="text" id="input-to" placeholder="Destination — rue, arrêt, lieu…" autocomplete="off">
+        <input type="text" id="input-to" placeholder="Destination — rue, arrêt, lieu…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" name="destination-libre">
         <div class="autocomplete" id="autocomplete-to"></div>
       </div>
 
@@ -283,7 +283,7 @@
     <div class="card" style="position:relative;">
       <div class="field">
         <div class="dot dot-from"></div>
-        <input type="text" id="input-station" placeholder="Nom de la ville, ex: Lausanne" autocomplete="off">
+        <input type="text" id="input-station" placeholder="Nom de la ville, ex: Lausanne" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" name="ville-libre">
         <div class="autocomplete" id="autocomplete-station"></div>
       </div>
     </div>
