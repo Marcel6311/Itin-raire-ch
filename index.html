@@ -391,6 +391,7 @@ function stopLiveMapTracking(){
 function showScreen(name){
   if(name !== 'detail') stopLiveMapTracking();
   if(name !== 'station'){ stopStationBoardRefresh(); stopGareLocationWatch(); }
+  if(name !== 'home') stopHomeBoardRefresh(); else if(nearbyStations.length > 0) startHomeBoardRefresh();
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + name).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -447,6 +448,7 @@ function initGeolocation(){
       document.getElementById('geo-label').innerHTML = '<span class="live-dot"></span>Position détectée';
       document.getElementById('geo-banner-slot').innerHTML = '';
       loadNearbyDepartures();
+      startHomeBoardRefresh();
     },
     err => {
       let msg = "Impossible d'obtenir votre position.";
@@ -455,6 +457,20 @@ function initGeolocation(){
     },
     { enableHighAccuracy:true, timeout:10000 }
   );
+}
+
+// Actualisation automatique du tableau des départs proches, tant qu'on reste sur l'écran d'accueil
+let homeBoardInterval = null;
+function startHomeBoardRefresh(){
+  stopHomeBoardRefresh();
+  homeBoardInterval = setInterval(async () => {
+    const fresh = await getFreshPosition();
+    if(fresh) userCoords = fresh;
+    if(nearbyStations.length > 0) loadNearbyDepartures();
+  }, 20000);
+}
+function stopHomeBoardRefresh(){
+  if(homeBoardInterval){ clearInterval(homeBoardInterval); homeBoardInterval = null; }
 }
 
 function renderGeoError(msg){
@@ -488,22 +504,51 @@ async function renderStationGroup(station){
   const dist = station.distance ? Math.round(station.distance) + ' m · ' + walkMinutes(station.distance) + "′" : '';
   let rowsHtml = '<div class="flap-empty">Aucun départ imminent.</div>';
   try{
-    const res = await fetch(`${API}/stationboard?id=${station.id}&limit=4`);
+    // On récupère plus large (12), puis on ne garde que le PROCHAIN départ de chaque ligne distincte
+    // (catégorie + numéro + direction) — utile pour les grandes stations (ex. Chauderon avec LEB + bus)
+    // où sinon la même ligne répétée 3 fois remplirait tout le tableau au lieu de montrer la diversité.
+    const res = await fetch(`${API}/stationboard?id=${station.id}&limit=12`);
     const data = await res.json();
-    const rows = (data.stationboard || []).map(j => {
+    const seenLines = new Set();
+    const deduped = [];
+    for(const j of (data.stationboard || [])){
+      const lineKey = `${j.category}${j.number}→${j.to}`;
+      if(!seenLines.has(lineKey)){
+        seenLines.add(lineKey);
+        deduped.push(j);
+      }
+      if(deduped.length >= 5) break;
+    }
+
+    const rows = deduped.map(j => {
       const mode = iconForCategory(j.category);
       const delay = computeDelayMin(j.stop);
       const timeCls = delay > 0 ? 'flap-time delay' : 'flap-time';
       const badge = delay > 0 ? `<span class="flap-badge badge-delay">+${delay} min</span>` : `<span class="flap-badge badge-ontime">à l'heure</span>`;
       const t = fmtTime(j.stop.departure);
       const lineNum = j.number || j.category || '';
+
+      // Attrapable à pied depuis votre position actuelle ?
+      let unreachable = false;
+      let reachNote = '';
+      if(station.coordinate && userCoords){
+        const distM = haversineMeters(userCoords.lat, userCoords.lon, station.coordinate.x, station.coordinate.y);
+        const neededWalkMin = walkMinutes(distM);
+        const minutesUntilDep = (new Date(j.stop.departure) - new Date()) / 60000;
+        if(neededWalkMin > minutesUntilDep){
+          unreachable = true;
+          reachNote = `<div style="padding:0 0 5px 91px; font-size:10px; color:var(--amber); font-family:'IBM Plex Mono',monospace;">⚠️ Trop juste : ≈ ${neededWalkMin} min de marche, ${Math.max(0, Math.round(minutesUntilDep))} min restantes</div>`;
+        }
+      }
+      const destStyle = unreachable ? 'color:var(--amber); font-weight:700;' : '';
+
       return `<div class="flap-row">
         <span class="${timeCls}">${t}</span>
         <div class="flap-mode ${mode.cls}">${mode.icon}</div>
         <span class="flap-line">${lineNum}</span>
-        <span class="flap-dest">${j.to || ''}</span>
+        <span class="flap-dest" style="${destStyle}">${j.to || ''}</span>
         ${badge}
-      </div>`;
+      </div>${reachNote}`;
     });
     if(rows.length) rowsHtml = rows.join('');
   } catch(e){ rowsHtml = '<div class="flap-empty">Erreur de chargement.</div>'; }
