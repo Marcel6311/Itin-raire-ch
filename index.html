@@ -481,9 +481,12 @@ function initGeolocation(){
 
 // Actualisation automatique du tableau des départs proches, tant qu'on reste sur l'écran d'accueil
 let homeBoardInterval = null;
+let formFieldFocused = false;
+
 function startHomeBoardRefresh(){
   stopHomeBoardRefresh();
   homeBoardInterval = setInterval(async () => {
+    if(formFieldFocused) return; // on ne dérange pas une saisie en cours
     const fresh = await getFreshPosition();
     if(fresh) userCoords = fresh;
     if(nearbyStations.length > 0) loadNearbyDepartures();
@@ -591,6 +594,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Pré-remplit la date du jour pour le sélecteur "Arriver à…"
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('input-arrive-date').value = today;
+
+  ['input-from', 'input-to', 'input-arrive-date', 'input-arrive-time'].forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener('focus', () => { formFieldFocused = true; });
+    el.addEventListener('blur', () => { formFieldFocused = false; });
+  });
 
   document.querySelectorAll('#time-mode-row .chip').forEach(chip => {
     chip.addEventListener('click', () => {
