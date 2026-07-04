@@ -263,11 +263,11 @@
     <div class="card" style="position:relative;">
       <div class="field">
         <div class="dot dot-from"></div>
-        <input type="text" id="input-station" placeholder="Nom de la gare" autocomplete="off">
+        <input type="text" id="input-station" placeholder="Nom de la ville, ex: Lausanne" autocomplete="off">
         <div class="autocomplete" id="autocomplete-station"></div>
       </div>
     </div>
-    <p class="value-note" style="margin:0 20px 10px;">Tableau des départs (trains uniquement), actualisé automatiquement toutes les 20 s. La position se remet à jour automatiquement si vous vous êtes déplacé de plus de 1,5 km (ex. après un trajet en train) — sinon, appuyez sur 🔄 pour forcer. Il n'existe pas de tableau des arrivées séparé dans les données suisses officielles — comme sur les vrais écrans de gare, ce sont les départs qui comptent pour savoir où aller.</p>
+    <p class="value-note" style="margin:0 20px 10px;">Tapez le nom d'une ville (pas "gare" en plus — juste le nom, ex. "Lausanne"), sélectionnez-la dans la liste. Tableau des départs (trains uniquement), actualisé automatiquement toutes les 20 s. Il n'existe pas de tableau des arrivées séparé dans les données suisses officielles — comme sur les vrais écrans de gare, ce sont les départs qui comptent pour savoir où aller.</p>
     <div id="station-board"></div>
   </div>
 
@@ -848,40 +848,75 @@ function getFreshPosition(){
 async function loadStationScreen(forceRefresh){
   setupAutocomplete('input-station', 'autocomplete-station', 'stationboard');
   const board = document.getElementById('station-board');
-  board.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Localisation en cours…</div>';
+  board.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Étape 1/3 — Localisation en cours…</div>';
 
   const freshCoords = await getFreshPosition();
-  if(freshCoords) userCoords = freshCoords;
+  if(!freshCoords){
+    board.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Localisation impossible — vérifiez que vous avez autorisé la position pour ce site dans Safari.</div>';
+    return;
+  }
+  userCoords = freshCoords;
 
-  const movedFar = lastGareSearchCoords && freshCoords &&
+  const movedFar = lastGareSearchCoords &&
     haversineMeters(lastGareSearchCoords.lat, lastGareSearchCoords.lon, freshCoords.lat, freshCoords.lon) > GARE_REFRESH_DISTANCE_M;
 
-  if((verifiedGares.length === 0 || movedFar || forceRefresh) && freshCoords){
-    board.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Recherche des gares à proximité (vérification en cours)…</div>';
+  if(verifiedGares.length === 0 || movedFar || forceRefresh){
+    // Étape 2 : coordonnées GPS → nom de la ville (géocodage inversé Google)
+    board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Étape 2/3 — Identification de la ville (${freshCoords.lat.toFixed(4)}, ${freshCoords.lon.toFixed(4)})…</div>`;
+    let cityName = null;
     try{
-      // On élargit largement (30 arrêts, pas 10) : dans une ville comme Lausanne, de nombreux
-      // arrêts de bus/métro sont plus proches que la gare elle-même. Un rayon trop étroit la
-      // faisait passer à côté. Vérification UNE PAR UNE (pas en rafale, qui semble bloquer l'API),
-      // avec arrêt dès qu'on a trouvé 3 vraies gares pour rester rapide.
-      const res = await fetch(`${API}/locations?x=${freshCoords.lat}&y=${freshCoords.lon}&type=station`);
+      const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${freshCoords.lat},${freshCoords.lon}&language=fr&result_type=locality&key=${GOOGLE_MAPS_API_KEY}`);
+      const geoData = await geoRes.json();
+      bumpUsage('usage_places_calls');
+      if(geoData.status !== 'OK'){
+        board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Échec à l'étape 2 (identification de la ville) — statut Google : ${geoData.status}${geoData.error_message ? ' — ' + geoData.error_message : ''}. Vérifiez que "Geocoding API" est bien activée dans Google Cloud Console.</div>`;
+        return;
+      }
+      const locality = geoData.results?.[0]?.address_components?.find(c => c.types.includes('locality'));
+      cityName = locality ? locality.long_name : null;
+      if(!cityName){
+        board.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Étape 2 réussie mais aucune ville identifiée à cette position précise (zone rurale ?).</div>';
+        return;
+      }
+    } catch(e){
+      board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur réseau à l'étape 2 : ${e.message || e}</div>`;
+      return;
+    }
+
+    // Étape 3 : nom de la ville → sa gare CFF, vérifiée
+    board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Étape 3/3 — Ville identifiée : ${cityName}. Recherche de sa gare…</div>`;
+    try{
+      const res = await fetch(`${API}/locations?query=${encodeURIComponent(cityName)}`);
       const data = await res.json();
-      const candidates = (data.stations || []).filter(s => s.id).slice(0, 30);
-      const nearby = [];
-      for(let i = 0; i < candidates.length && nearby.length < 3; i++){
-        board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Vérification ${i+1}/${candidates.length} — ${candidates[i].name}…</div>`;
-        if(await isRealTrainStation(candidates[i].id)) nearby.push(candidates[i]);
+      const candidates = (data.stations || []).filter(s => s.id);
+      candidates.sort((a, b) => {
+        const aExact = a.name.toLowerCase() === cityName.toLowerCase() ? 0 : 1;
+        const bExact = b.name.toLowerCase() === cityName.toLowerCase() ? 0 : 1;
+        return aExact - bExact;
+      });
+
+      let found = null;
+      for(const c of candidates.slice(0, 5)){
+        if(await isRealTrainStation(c.id)){ found = c; break; }
+      }
+
+      if(!found){
+        board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Ville identifiée : ${cityName}. Mais aucune gare avec des trains trouvée sous ce nom parmi ${candidates.length} résultat(s) (${candidates.slice(0,5).map(c=>c.name).join(', ') || 'aucun'}).</div>`;
+        return;
       }
 
       const merged = [...manualGares];
-      nearby.forEach(n => { if(!merged.some(m => m.id === n.id)) merged.push(n); });
-
+      if(!merged.some(m => m.id === found.id)) merged.push(found);
       verifiedGares = merged;
       lastGareSearchCoords = freshCoords;
-    } catch(e){ /* silencieux, on retombe sur le message ci-dessous */ }
+    } catch(e){
+      board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur réseau à l'étape 3 : ${e.message || e}</div>`;
+      return;
+    }
   }
 
   if(verifiedGares.length === 0){
-    board.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Aucune gare CFF vérifiée à proximité. Indiquez-en une manuellement ci-dessus (elle sera vérifiée avant d\'être affichée).</div>';
+    board.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Aucune gare trouvée.</div>';
     return;
   }
 
