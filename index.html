@@ -189,6 +189,16 @@
         <input type="text" id="input-to" placeholder="Destination — rue, arrêt, lieu…" autocomplete="off">
         <div class="autocomplete" id="autocomplete-to"></div>
       </div>
+
+      <div class="sort-row" id="time-mode-row" style="padding:8px 0 0;">
+        <div class="chip active" data-timemode="depart">🕐 Partir maintenant</div>
+        <div class="chip" data-timemode="arrive">🎯 Arriver à…</div>
+      </div>
+      <div id="time-picker-row" style="display:none; gap:8px; padding:10px 0 0;">
+        <input type="date" id="input-arrive-date" style="flex:1; border:1px solid var(--line); border-radius:10px; padding:9px; font-family:'Inter',sans-serif; font-size:13px; color:var(--ink); background:var(--paper-raised);">
+        <input type="time" id="input-arrive-time" style="flex:1; border:1px solid var(--line); border-radius:10px; padding:9px; font-family:'Inter',sans-serif; font-size:13px; color:var(--ink); background:var(--paper-raised); margin-left:8px;">
+      </div>
+
       <button class="btn-primary" id="btn-search" onclick="searchTrips()">Voir les trajets <span class="arrow">→</span></button>
     </div>
 
@@ -567,6 +577,19 @@ document.addEventListener('DOMContentLoaded', () => {
   setupAutocomplete('input-from', 'autocomplete-from', 'origin');
   setupAutocomplete('input-to', 'autocomplete-to', 'destination');
   initGeolocation();
+
+  // Pré-remplit la date du jour pour le sélecteur "Arriver à…"
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('input-arrive-date').value = today;
+
+  document.querySelectorAll('#time-mode-row .chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('#time-mode-row .chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      const isArrive = chip.dataset.timemode === 'arrive';
+      document.getElementById('time-picker-row').style.display = isArrive ? 'flex' : 'none';
+    });
+  });
 });
 
 function setupAutocomplete(inputId, boxId, kind){
@@ -735,6 +758,11 @@ async function resolvePlaceDestination(pred, inputId){
 async function searchTrips(){
   const destInput = document.getElementById('input-to').value.trim();
   if(!destInput){ showToast('Indiquez une destination.'); return; }
+  const isArriveModeCheck = document.querySelector('#time-mode-row .chip[data-timemode="arrive"]').classList.contains('active');
+  if(isArriveModeCheck && !document.getElementById('input-arrive-time').value){
+    showToast('Choisissez une heure d\'arrivée souhaitée, ou repassez sur "Partir maintenant".');
+    return;
+  }
 
   // Départ : priorité à une station précise choisie via l'autocomplétion.
   // Sinon, on retombe sur l'arrêt géolocalisé le plus proche.
@@ -762,12 +790,23 @@ async function searchTrips(){
   lastFromCoordinate = fromCoordinate;
 
   showScreen('results');
-  document.getElementById('results-route').textContent = fromLabel + ' → ' + destInput;
+  const isArriveMode = document.querySelector('#time-mode-row .chip[data-timemode="arrive"]').classList.contains('active');
+  let timeParams = '';
+  let routeSuffix = '';
+  if(isArriveMode){
+    const dateVal = document.getElementById('input-arrive-date').value;
+    const timeVal = document.getElementById('input-arrive-time').value;
+    if(timeVal){
+      timeParams = `&date=${dateVal}&time=${timeVal}&isArrivalTime=1`;
+      routeSuffix = ` · arrivée souhaitée ${timeVal}`;
+    }
+  }
+  document.getElementById('results-route').textContent = fromLabel + ' → ' + destInput + routeSuffix;
   document.getElementById('results-title').textContent = 'Recherche des trajets…';
   document.getElementById('results-list').innerHTML = '<div class="flap-loading" style="padding:0 20px;">Interrogation des horaires CFF/TL en temps réel…</div>';
 
   try{
-    const res = await fetch(`${API}/connections?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toParam)}&limit=4`);
+    const res = await fetch(`${API}/connections?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toParam)}&limit=4${timeParams}`);
     const data = await res.json();
     currentConnections = data.connections || [];
     btn.disabled = false; btn.innerHTML = 'Voir les trajets <span class="arrow">→</span>';
