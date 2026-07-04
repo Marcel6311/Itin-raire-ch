@@ -590,11 +590,16 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
 
       if(kind === 'stationboard'){
         const board = document.getElementById('station-board');
-        board.insertAdjacentHTML('afterbegin', `<div class="flap-loading" id="checking-${s.id}" style="padding:0 20px 10px;">Vérification que "${s.name}" est bien une gare avec des trains…</div>`);
-        const isReal = await isRealTrainStation(s.id);
+        board.insertAdjacentHTML('afterbegin', `<div class="flap-loading" id="checking-${s.id}" style="padding:0 20px 10px;">Vérification de "${s.name}" (id: ${s.id})…</div>`);
+        const diag = await checkStationDiagnostic(s.id);
         document.getElementById('checking-' + s.id)?.remove();
-        if(!isReal){
-          showToast(`"${s.name}" ne semble pas être une gare avec des trains — non ajoutée pour éviter une info erronée.`, 5000);
+        if(!diag.hasTrain){
+          const detail = diag.error
+            ? `Erreur réseau : ${diag.error}`
+            : diag.count === 0
+              ? `0 passage renvoyé par l'API pour cet identifiant (${s.id}).`
+              : `${diag.count} passages trouvés, mais aucun train — catégories reçues : ${[...new Set(diag.cats)].join(', ')}`;
+          showToast(`"${s.name}" — ${detail}`, 8000);
           return;
         }
         if(!verifiedGares.some(g => g.id === s.id)){
@@ -809,6 +814,22 @@ async function isRealTrainStation(id){
     const data = await res.json();
     return (data.stationboard || []).some(j => TRAIN_CATEGORIES.includes((j.category || '').toUpperCase()));
   } catch(e){ return false; }
+}
+
+// Version diagnostique : renvoie le détail de ce que l'API a réellement répondu,
+// pour qu'on voie la vraie cause au lieu de deviner à nouveau.
+async function checkStationDiagnostic(id){
+  try{
+    const res = await fetch(`${API}/stationboard?id=${id}&limit=15`);
+    if(!res.ok) return { hasTrain: false, count: 0, error: `HTTP ${res.status}` };
+    const data = await res.json();
+    const board = data.stationboard || [];
+    const cats = board.map(j => j.category || '?');
+    const hasTrain = cats.some(c => TRAIN_CATEGORIES.includes(c.toUpperCase()));
+    return { hasTrain, count: board.length, cats };
+  } catch(e){
+    return { hasTrain: false, count: 0, error: e.message || String(e) };
+  }
 }
 
 function getFreshPosition(){
