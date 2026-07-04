@@ -604,6 +604,7 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
         }
         if(!verifiedGares.some(g => g.id === s.id)){
           verifiedGares.push({ id: s.id, name: s.name, distance: null });
+          manualGares.push({ id: s.id, name: s.name, distance: null });
           board.insertAdjacentHTML('beforeend', `<div id="gare-board-${s.id}" style="margin-bottom:14px;"></div>`);
           refreshOneStationBoard(s.id, s.name, null);
         }
@@ -800,6 +801,7 @@ function renderResults(fromLabel, fromDistanceMeters){
 // affichent au moins un vrai train sont retenus et étiquetés "gare".
 let stationBoardInterval = null;
 let verifiedGares = []; // {id, name, distance}
+let manualGares = []; // gares ajoutées à la main — jamais effacées par la recherche automatique
 let lastGareSearchCoords = null; // {lat, lon} — position utilisée lors de la dernière recherche de gares
 const TRAIN_CATEGORIES = ['IC','IR','RE','R','EC','TGV','ICE','S','SN','EXT','NJ','TE2'];
 const GARE_REFRESH_DISTANCE_M = 1500; // au-delà, on considère qu'on a changé de secteur (ex. arrivée en train dans une autre ville)
@@ -843,38 +845,6 @@ function getFreshPosition(){
   });
 }
 
-// Traduit une position GPS en nom de ville (géocodage inversé Google), pour ensuite
-// chercher directement la gare CFF de CETTE ville plutôt que de deviner par proximité.
-async function getCityName(lat, lon){
-  try{
-    const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&language=fr&result_type=locality&key=${GOOGLE_MAPS_API_KEY}`);
-    const data = await res.json();
-    bumpUsage('usage_places_calls');
-    if(data.status !== 'OK' || !data.results?.[0]) return null;
-    const locality = data.results[0].address_components.find(c => c.types.includes('locality'));
-    return locality ? locality.long_name : null;
-  } catch(e){ return null; }
-}
-
-// Cherche la gare CFF correspondant précisément au nom de cette ville (ex. "Lausanne" → gare "Lausanne")
-async function findCityStation(cityName){
-  try{
-    const res = await fetch(`${API}/locations?query=${encodeURIComponent(cityName)}`);
-    const data = await res.json();
-    const candidates = (data.stations || []).filter(s => s.id);
-    // On priorise une correspondance exacte du nom (ex. "Lausanne" plutôt que "Lausanne-Flon")
-    candidates.sort((a, b) => {
-      const aExact = a.name.toLowerCase() === cityName.toLowerCase() ? 0 : 1;
-      const bExact = b.name.toLowerCase() === cityName.toLowerCase() ? 0 : 1;
-      return aExact - bExact;
-    });
-    for(const c of candidates.slice(0, 5)){
-      if(await isRealTrainStation(c.id)) return c;
-    }
-    return null;
-  } catch(e){ return null; }
-}
-
 async function loadStationScreen(forceRefresh){
   setupAutocomplete('input-station', 'autocomplete-station', 'stationboard');
   const board = document.getElementById('station-board');
@@ -887,25 +857,18 @@ async function loadStationScreen(forceRefresh){
     haversineMeters(lastGareSearchCoords.lat, lastGareSearchCoords.lon, freshCoords.lat, freshCoords.lon) > GARE_REFRESH_DISTANCE_M;
 
   if((verifiedGares.length === 0 || movedFar || forceRefresh) && freshCoords){
-    board.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Identification de votre ville…</div>';
+    board.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Recherche des gares à proximité (vérification en cours)…</div>';
     try{
-      const cityName = await getCityName(freshCoords.lat, freshCoords.lon);
-      let cityStation = null;
-      if(cityName){
-        board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Recherche de la gare de ${cityName}…</div>`;
-        cityStation = await findCityStation(cityName);
-      }
-
-      // En complément, les autres gares vérifiées à proximité immédiate (utile en zone frontalière
-      // entre deux villes, ou si plusieurs gares desservent la même agglomération).
+      // On élargit largement (30 arrêts, pas 10) : dans une ville comme Lausanne, de nombreux
+      // arrêts de bus/métro sont plus proches que la gare elle-même. Un rayon trop étroit la
+      // faisait passer à côté. On vérifie chaque candidat avant de l'afficher, comme avant.
       const res = await fetch(`${API}/locations?x=${freshCoords.lat}&y=${freshCoords.lon}&type=station`);
       const data = await res.json();
-      const candidates = (data.stations || []).filter(s => s.id).slice(0, 10);
+      const candidates = (data.stations || []).filter(s => s.id).slice(0, 30);
       const checks = await Promise.all(candidates.map(c => isRealTrainStation(c.id)));
       const nearby = candidates.filter((c, i) => checks[i]);
 
-      const merged = [];
-      if(cityStation) merged.push(cityStation);
+      const merged = [...manualGares];
       nearby.forEach(n => { if(!merged.some(m => m.id === n.id)) merged.push(n); });
 
       verifiedGares = merged;
