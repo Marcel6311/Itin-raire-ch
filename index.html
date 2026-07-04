@@ -194,9 +194,19 @@
         <div class="chip active" data-timemode="depart">🕐 Partir maintenant</div>
         <div class="chip" data-timemode="arrive">🎯 Arriver à…</div>
       </div>
-      <div id="time-picker-row" style="display:none; gap:8px; padding:10px 0 0;">
-        <input type="date" id="input-arrive-date" style="flex:1; border:1px solid var(--line); border-radius:10px; padding:9px; font-family:'Inter',sans-serif; font-size:13px; color:var(--ink); background:var(--paper-raised);">
-        <input type="time" id="input-arrive-time" style="flex:1; border:1px solid var(--line); border-radius:10px; padding:9px; font-family:'Inter',sans-serif; font-size:13px; color:var(--ink); background:var(--paper-raised); margin-left:8px;">
+      <div id="time-picker-row" style="display:none; gap:8px; padding:10px 0 0; flex-direction:column;">
+        <div style="display:flex; gap:8px;">
+          <input type="date" id="input-arrive-date" style="flex:1; border:1px solid var(--line); border-radius:10px; padding:9px; font-family:'Inter',sans-serif; font-size:13px; color:var(--ink); background:var(--paper-raised);">
+          <input type="time" id="input-arrive-time" style="flex:1; border:1px solid var(--line); border-radius:10px; padding:9px; font-family:'Inter',sans-serif; font-size:13px; color:var(--ink); background:var(--paper-raised);">
+        </div>
+        <p class="value-note" style="margin:8px 0 4px;">Marge avant le rendez-vous (pour ne pas arriver pile à l'heure) :</p>
+        <div class="sort-row" id="buffer-row" style="padding:0;">
+          <div class="chip" data-buffer="0">Pile à l'heure</div>
+          <div class="chip" data-buffer="10">10 min</div>
+          <div class="chip active" data-buffer="15">15 min</div>
+          <div class="chip" data-buffer="20">20 min</div>
+          <div class="chip" data-buffer="30">30 min</div>
+        </div>
       </div>
 
       <button class="btn-primary" id="btn-search" onclick="searchTrips()">Voir les trajets <span class="arrow">→</span></button>
@@ -590,6 +600,13 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('time-picker-row').style.display = isArrive ? 'flex' : 'none';
     });
   });
+
+  document.querySelectorAll('#buffer-row .chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('#buffer-row .chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+    });
+  });
 });
 
 function setupAutocomplete(inputId, boxId, kind){
@@ -796,9 +813,18 @@ async function searchTrips(){
   if(isArriveMode){
     const dateVal = document.getElementById('input-arrive-date').value;
     const timeVal = document.getElementById('input-arrive-time').value;
+    const bufferMin = parseInt(document.querySelector('#buffer-row .chip.active')?.dataset.buffer || '0', 10);
     if(timeVal){
-      timeParams = `&date=${dateVal}&time=${timeVal}&isArrivalTime=1`;
-      routeSuffix = ` · arrivée souhaitée ${timeVal}`;
+      // On vise une arrivée AVANT le rendez-vous (heure moins la marge choisie),
+      // pour ne jamais calculer un trajet qui arrive pile à l'heure sans respirer.
+      const target = new Date(`${dateVal}T${timeVal}:00`);
+      target.setMinutes(target.getMinutes() - bufferMin);
+      const adjDate = target.toISOString().split('T')[0];
+      const adjTime = target.toTimeString().slice(0,5);
+      timeParams = `&date=${adjDate}&time=${adjTime}&isArrivalTime=1`;
+      routeSuffix = bufferMin > 0
+        ? ` · rendez-vous ${timeVal}, visée ${adjTime} (marge ${bufferMin} min)`
+        : ` · arrivée souhaitée ${timeVal}`;
     }
   }
   document.getElementById('results-route').textContent = fromLabel + ' → ' + destInput + routeSuffix;
