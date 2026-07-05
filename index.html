@@ -176,6 +176,11 @@
       <div class="flap-header"><span>Arrêts à proximité</span><span>Temps réel</span></div>
       <div class="flap-loading">En attente de votre position…</div>
     </div>
+    <div class="sort-row" id="home-time-row" style="padding:0 20px 10px;">
+      <div class="chip" onclick="shiftHomeTime(-5)">− 5 min</div>
+      <div class="chip active" id="home-time-label" onclick="resetHomeTime()">🕐 Maintenant</div>
+      <div class="chip" onclick="shiftHomeTime(5)">+ 5 min</div>
+    </div>
 
     <div class="card">
       <div class="field">
@@ -288,6 +293,11 @@
       </div>
     </div>
     <p class="value-note" style="margin:0 20px 10px;">Tapez le nom d'une ville (pas "gare" en plus — juste le nom, ex. "Lausanne"), sélectionnez-la dans la liste. Tableau des départs (trains uniquement), actualisé automatiquement toutes les 20 s. Il n'existe pas de tableau des arrivées séparé dans les données suisses officielles — comme sur les vrais écrans de gare, ce sont les départs qui comptent pour savoir où aller.</p>
+    <div class="sort-row" id="gare-time-row" style="padding:0 20px 10px;">
+      <div class="chip" onclick="shiftGareTime(-5)">− 5 min</div>
+      <div class="chip active" id="gare-time-label" onclick="resetGareTime()">🕐 Maintenant</div>
+      <div class="chip" onclick="shiftGareTime(5)">+ 5 min</div>
+    </div>
     <div id="station-board"></div>
   </div>
 
@@ -547,6 +557,27 @@ function renderGeoError(msg){
     '<div class="flap-empty">Activez la localisation pour voir les départs autour de vous.</div>';
 }
 
+// Décalage temporel du tableau d'accueil (même principe que sur l'écran Gare)
+let homeTimeOffsetMin = 0;
+
+function updateHomeTimeLabel(){
+  const label = document.getElementById('home-time-label');
+  if(!label) return;
+  label.textContent = homeTimeOffsetMin === 0 ? '🕐 Maintenant' : `🕐 +${homeTimeOffsetMin} min`;
+}
+
+function shiftHomeTime(deltaMin){
+  homeTimeOffsetMin = Math.max(0, homeTimeOffsetMin + deltaMin);
+  updateHomeTimeLabel();
+  loadNearbyDepartures();
+}
+
+function resetHomeTime(){
+  homeTimeOffsetMin = 0;
+  updateHomeTimeLabel();
+  loadNearbyDepartures();
+}
+
 async function loadNearbyDepartures(){
   const board = document.getElementById('flapboard');
   board.innerHTML = '<div class="flap-header"><span>Arrêts à proximité</span><span>Temps réel</span></div><div class="flap-loading">Recherche des arrêts proches…</div>';
@@ -572,7 +603,8 @@ async function renderStationGroup(station){
     // On récupère plus large (12), puis on ne garde que le PROCHAIN départ de chaque ligne distincte
     // (catégorie + numéro + direction) — utile pour les grandes stations (ex. Chauderon avec LEB + bus)
     // où sinon la même ligne répétée 3 fois remplirait tout le tableau au lieu de montrer la diversité.
-    const res = await fetch(`${API}/stationboard?id=${station.id}&limit=12`);
+    const dtParam = homeTimeOffsetMin !== 0 ? `&datetime=${encodeURIComponent(formatOffsetDatetime(homeTimeOffsetMin))}` : '';
+    const res = await fetch(`${API}/stationboard?id=${station.id}&limit=12${dtParam}`);
     const data = await res.json();
     const seenLines = new Set();
     const deduped = [];
@@ -997,8 +1029,37 @@ function getFreshPosition(){
   });
 }
 
+// Décalage temporel du tableau de gare (en minutes) — permet de consulter un horaire futur réel,
+// pas simulé, via le paramètre "datetime" officiel de l'API.
+let gareTimeOffsetMin = 0;
+
+function formatOffsetDatetime(offsetMin){
+  const d = new Date(Date.now() + offsetMin * 60000);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function updateGareTimeLabel(){
+  const label = document.getElementById('gare-time-label');
+  if(!label) return;
+  label.textContent = gareTimeOffsetMin === 0 ? '🕐 Maintenant' : `🕐 +${gareTimeOffsetMin} min`;
+}
+
+function shiftGareTime(deltaMin){
+  gareTimeOffsetMin = Math.max(0, gareTimeOffsetMin + deltaMin);
+  updateGareTimeLabel();
+  verifiedGares.forEach(g => refreshOneStationBoard(g.id, g.name, g.distance, g.coordinate));
+}
+
+function resetGareTime(){
+  gareTimeOffsetMin = 0;
+  updateGareTimeLabel();
+  verifiedGares.forEach(g => refreshOneStationBoard(g.id, g.name, g.distance, g.coordinate));
+}
+
 async function loadStationScreen(forceRefresh){
   setupAutocomplete('input-station', 'autocomplete-station', 'stationboard');
+  updateGareTimeLabel();
   const board = document.getElementById('station-board');
   board.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Étape 1/3 — Localisation en cours…</div>';
 
@@ -1099,7 +1160,8 @@ async function refreshOneStationBoard(id, name, distance, coordinate){
   const slot = document.getElementById('gare-board-' + id);
   if(!slot) return;
   try{
-    const res = await fetch(`${API}/stationboard?id=${id}&limit=25`);
+    const dtParam = gareTimeOffsetMin !== 0 ? `&datetime=${encodeURIComponent(formatOffsetDatetime(gareTimeOffsetMin))}` : '';
+    const res = await fetch(`${API}/stationboard?id=${id}&limit=25${dtParam}`);
     const data = await res.json();
     const trains = (data.stationboard || []).filter(j => TRAIN_CATEGORIES.includes((j.category || '').toUpperCase())).slice(0, 10);
     const distTxt = distance ? ` · ${Math.round(distance)} m` : '';
