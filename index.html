@@ -641,9 +641,14 @@ async function renderStationGroup(station){
       </div>${reachNote}`;
     });
     if(rows.length) rowsHtml = rows.join('');
-  } catch(e){ rowsHtml = '<div class="flap-empty">Erreur de chargement.</div>'; }
 
-  return `<div class="flap-stopgroup"><span>🚏 ${station.name}</span><span class="stop-dist">${dist}</span></div>${rowsHtml}`;
+    // Si deux arrêts proches portent le même nom (sens opposés), la seule façon de les distinguer
+    // au premier coup d'œil est d'indiquer les directions desservies directement dans le titre.
+    var directions = [...new Set(deduped.map(j => j.to).filter(Boolean))].slice(0, 2);
+    var directionSuffix = directions.length ? ` <span style="color:#8B93A0; font-weight:500;">→ ${directions.join(', ')}</span>` : '';
+  } catch(e){ rowsHtml = '<div class="flap-empty">Erreur de chargement.</div>'; var directionSuffix = ''; }
+
+  return `<div class="flap-stopgroup"><span>🚏 ${station.name}${directionSuffix}</span><span class="stop-dist">${dist}</span></div>${rowsHtml}`;
 }
 
 function useCurrentLocation(){
