@@ -30,23 +30,25 @@
   .flap-stopgroup{ display:flex; justify-content:space-between; align-items:center; padding:11px 0 5px; color:#C7CCD4; font-size:11.5px; font-weight:600; }
   .flap-direction-label{ color:#6F7787; font-family:'IBM Plex Mono',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; padding:9px 0 3px; border-top:1px solid rgba(255,255,255,.08); }
   .flap-direction-grey{ background:rgba(255,255,255,.10); border-radius:8px; margin:0 -8px; padding:2px 8px 4px; }
-  .flap-direction-grey .flap-dest{ color:#5B6472; font-weight:500; }
-  .flap-direction-grey .flap-line{ color:#5B6472; background:rgba(255,255,255,.03); }
-  .flap-direction-grey .flap-time:not(.delay){ color:#5B6472; }
-  .flap-direction-grey .flap-mode{ opacity:.35; filter:grayscale(1); }
+  .flap-direction-grey .flap-dest{ color:#FFFFFF; font-weight:700; }
+  .flap-direction-grey .flap-line{ color:#FFFFFF; background:rgba(255,255,255,.14); }
+  .flap-direction-grey .flap-time:not(.delay){ color:#FFFFFF; }
+  .flap-direction-grey .flap-mode{ opacity:1; filter:none; }
   .flap-direction-label:first-child{ border-top:none; padding-top:2px; }
   .flap-stopgroup:first-of-type{ padding-top:2px; }
   .flap-stopgroup .stop-dist{ color:#6F7787; font-weight:500; }
   .flap-row{ display:flex; align-items:center; gap:9px; padding:7px 0; border-top:1px solid rgba(255,255,255,.08); }
-  .flap-time{ background:#0E1116; color:#F3EFE4; font-weight:600; font-size:14px; padding:4px 6px; border-radius:5px; min-width:48px; text-align:center; flex-shrink:0; }
+  .flap-time{ background:#0E1116; color:#FFFFFF; font-weight:700; font-size:14px; padding:4px 6px; border-radius:5px; min-width:48px; text-align:center; flex-shrink:0; }
   .flap-time.delay{ color:var(--coral); }
   .flap-mode{ width:24px; height:24px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; }
   .mode-train{background:var(--coral);} .mode-bus{background:var(--lake);} .mode-boat{background:#3A6EA5;} .mode-tram{background:#7B5EA7;}
-  .flap-dest{ color:#F3EFE4; font-size:12.5px; font-weight:600; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .flap-line{ color:#F3EFE4; font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:600; background:rgba(255,255,255,.1); padding:2px 7px; border-radius:6px; flex-shrink:0; }
+  .flap-dest{ color:#FFFFFF; font-size:12.5px; font-weight:700; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .flap-line{ color:#FFFFFF; font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:700; background:rgba(255,255,255,.14); padding:2px 7px; border-radius:6px; flex-shrink:0; }
   .flap-badge{ font-size:9.5px; padding:2px 6px; border-radius:20px; font-weight:600; flex-shrink:0; }
-  .badge-ontime{ background:rgba(76,140,74,.25); color:#8FD98C; }
-  .badge-delay{ background:rgba(228,87,46,.25); color:#F0967A; }
+  .badge-ontime{ background:rgba(76,140,74,.3); color:#B7F0B4; font-weight:700; }
+  .badge-delay{ background:rgba(228,87,46,.3); color:#FFC4AE; font-weight:700; }
+  .quai-info{ color:#E8E6DE; }
+  .flap-direction-grey .quai-info{ color:#E8E6DE; }
   .flap-empty{ color:#8B93A0; font-size:12px; padding:8px 0; }
   .flap-loading{ color:#8B93A0; font-size:12px; padding:8px 0; font-family:'Inter',sans-serif; }
 
@@ -1219,7 +1221,7 @@ async function refreshOneStationBoard(id, name, distance, coordinate){
           <span class="flap-line">${lineNum}</span>
           <a href="${searchUrl}" target="_blank" class="flap-dest" style="text-decoration:underline; text-underline-offset:2px; ${destStyle}">${j.to || ''} ↗</a>
           ${badge}
-        </div>${platform ? `<div style="padding:0 0 6px 91px; font-size:10.5px; color:#8B93A0; font-family:'IBM Plex Mono',monospace;">${platform}</div>` : ''}${reachNote}`;
+        </div>${platform ? `<div class="quai-info" style="padding:0 0 6px 91px; font-size:10.5px; font-family:'IBM Plex Mono',monospace;">${platform}</div>` : ''}${reachNote}`;
       }).join('');
       return `<div class="flap-direction-block${isGrey ? ' flap-direction-grey' : ''}"><div class="flap-direction-label">→ ${dest}</div>${rows}</div>`;
     }).join('');
