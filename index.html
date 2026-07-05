@@ -172,14 +172,15 @@
 
     <div id="geo-banner-slot"></div>
 
-    <div class="flapboard" id="flapboard">
-      <div class="flap-header"><span>Arrêts à proximité</span><span>Temps réel</span></div>
-      <div class="flap-loading">En attente de votre position…</div>
-    </div>
-    <div class="sort-row" id="home-time-row" style="padding:0 20px 10px;">
+    <div class="sort-row" id="home-time-row" style="padding:8px 20px 4px;">
       <div class="chip" onclick="shiftHomeTime(-5)">− 5 min</div>
       <div class="chip active" id="home-time-label" onclick="resetHomeTime()">🕐 Maintenant</div>
       <div class="chip" onclick="shiftHomeTime(5)">+ 5 min</div>
+    </div>
+
+    <div class="flapboard" id="flapboard">
+      <div class="flap-header"><span>Arrêts à proximité</span><span>Temps réel</span></div>
+      <div class="flap-loading">En attente de votre position…</div>
     </div>
 
     <div class="card">
@@ -285,6 +286,11 @@
       </div>
       <button class="back-btn" onclick="loadStationScreen(true)" title="Actualiser ma position">🔄</button>
     </div>
+    <div class="sort-row" id="gare-time-row" style="padding:8px 20px 4px;">
+      <div class="chip" onclick="shiftGareTime(-5)">− 5 min</div>
+      <div class="chip active" id="gare-time-label" onclick="resetGareTime()">🕐 Maintenant</div>
+      <div class="chip" onclick="shiftGareTime(5)">+ 5 min</div>
+    </div>
     <div class="card" style="position:relative;">
       <div class="field">
         <div class="dot dot-from"></div>
@@ -293,11 +299,6 @@
       </div>
     </div>
     <p class="value-note" style="margin:0 20px 10px;">Tapez le nom d'une ville (pas "gare" en plus — juste le nom, ex. "Lausanne"), sélectionnez-la dans la liste. Tableau des départs (trains uniquement), actualisé automatiquement toutes les 20 s. Il n'existe pas de tableau des arrivées séparé dans les données suisses officielles — comme sur les vrais écrans de gare, ce sont les départs qui comptent pour savoir où aller.</p>
-    <div class="sort-row" id="gare-time-row" style="padding:0 20px 10px;">
-      <div class="chip" onclick="shiftGareTime(-5)">− 5 min</div>
-      <div class="chip active" id="gare-time-label" onclick="resetGareTime()">🕐 Maintenant</div>
-      <div class="chip" onclick="shiftGareTime(5)">+ 5 min</div>
-    </div>
     <div id="station-board"></div>
   </div>
 
