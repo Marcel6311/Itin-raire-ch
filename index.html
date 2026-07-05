@@ -342,6 +342,7 @@
 <script>
 const API = 'https://transport.opendata.ch/v1';
 const GOOGLE_MAPS_API_KEY = 'AIzaSyA4bGraPQ65Dp1b6Ph2FXc9y3W8u_LsPgw'; // même clé que le script Maps chargé en tête de page
+const MYSWITZERLAND_API_KEY = 'sd5Rc8HWSo2Y7ELCI2Z3LYM6oqltQD07Hc4Rdn8h';
 let userCoords = null;      // {lat, lon}
 let nearbyStations = [];    // list from /locations
 let selectedDestination = null; // {id, name, coordinate}
@@ -1499,8 +1500,45 @@ async function loadVisitScreen(mode){
     </p>
     <p class="value-note" style="margin-top:10px;">Sites et lieux référencés sur Wikipedia à proximité, triés par distance.</p>
     <div id="around-attractions-list"><div class="flap-loading" style="padding:0 20px;">Recherche des sites à proximité…</div></div>
+
+    <p class="section-label" style="margin-top:24px;">🎫 Événements dans les attractions officielles (2 km)</p>
+    <p class="value-note">Source : Suisse Tourisme — couvre uniquement les événements liés à des attractions officiellement référencées (musées, sites), pas les concerts ou manifestations indépendantes.</p>
+    <div id="official-events-list"><div class="flap-loading" style="padding:0 20px;">Recherche des événements officiels…</div></div>
   `;
   loadAttractions(lat, lon);
+  loadOfficialEvents(lat, lon);
+}
+
+async function loadOfficialEvents(lat, lon){
+  const list = document.getElementById('official-events-list');
+  try{
+    const res = await fetch(`https://opendata.myswitzerland.io/v1/attractions/?geo.dist=${lat},${lon},2000&hitsPerPage=50&expand=true&lang=fr`, {
+      headers: { 'x-api-key': MYSWITZERLAND_API_KEY }
+    });
+    if(!res.ok){
+      const errBody = await res.text();
+      list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur Suisse Tourisme : HTTP ${res.status} — ${errBody.slice(0,200)}</div>`;
+      return;
+    }
+    const data = await res.json();
+    const withEvents = (data.data || []).filter(a => a.event);
+    if(withEvents.length === 0){
+      list.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Aucun événement officiel en ce moment dans ce rayon.</div>';
+      return;
+    }
+    list.innerHTML = withEvents.map(a => `
+      <div class="place-card">
+        <div class="place-thumb" style="background:var(--coral-dim);">🎫</div>
+        <div class="place-info">
+          <div class="place-name">${a.name}</div>
+          <div class="meta-txt" style="margin-top:3px;">${a.event.location || ''}</div>
+          ${a.url ? `<a href="${a.url}" target="_blank" style="font-size:11.5px; color:var(--lake);">Voir la fiche officielle ↗</a>` : ''}
+        </div>
+      </div>
+    `).join('');
+  } catch(e){
+    list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Impossible de charger les événements officiels : ${e.message || e}</div>`;
+  }
 }
 
 let aroundAttractions = []; // cache local {pageid, title, dist, extract, thumbnail, lat, lon}
