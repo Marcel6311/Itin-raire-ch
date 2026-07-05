@@ -1448,19 +1448,52 @@ const PRICE_LABELS = {
 };
 
 // ---------- Section "À voir" : sites touristiques réels (OpenTripMap) ----------
-async function loadVisitScreen(){
-  document.getElementById('visit-eyebrow').textContent = lastAroundLabel ? 'À voir autour de' : '—';
-  document.getElementById('visit-title').textContent = lastAroundLabel || 'Aucune destination récente';
+let visitMode = 'destination'; // 'destination' ou 'position'
+
+async function loadVisitScreen(mode){
+  if(mode) visitMode = mode;
   const content = document.getElementById('visit-content');
 
-  if(!lastAroundCoord){
-    content.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Recherchez d\'abord un trajet — les sites autour de votre destination s\'afficheront ici automatiquement.</div>';
-    return;
+  content.innerHTML = `
+    <div class="sort-row" id="visit-mode-row">
+      <div class="chip ${visitMode === 'destination' ? 'active' : ''}" data-mode="destination">🎯 Destination du trajet</div>
+      <div class="chip ${visitMode === 'position' ? 'active' : ''}" data-mode="position">📍 Ma position actuelle</div>
+    </div>
+    <div id="visit-body"></div>
+  `;
+
+  document.querySelectorAll('#visit-mode-row .chip').forEach(chip => {
+    chip.addEventListener('click', () => loadVisitScreen(chip.dataset.mode));
+  });
+
+  const body = document.getElementById('visit-body');
+
+  let lat, lon;
+  if(visitMode === 'position'){
+    body.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Localisation en cours…</div>';
+    const fresh = await getFreshPosition();
+    if(!fresh){
+      body.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Localisation impossible — vérifiez que vous avez autorisé la position pour ce site.</div>';
+      return;
+    }
+    userCoords = fresh;
+    lat = fresh.lat; lon = fresh.lon;
+    document.getElementById('visit-eyebrow').textContent = 'À voir autour de';
+    document.getElementById('visit-title').textContent = 'Ma position actuelle';
+  } else {
+    if(!lastAroundCoord){
+      body.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Recherchez d\'abord un trajet — les sites autour de votre destination s\'afficheront ici automatiquement.</div>';
+      document.getElementById('visit-eyebrow').textContent = '—';
+      document.getElementById('visit-title').textContent = 'Aucune destination récente';
+      return;
+    }
+    lat = lastAroundCoord.x; lon = lastAroundCoord.y;
+    document.getElementById('visit-eyebrow').textContent = 'À voir autour de';
+    document.getElementById('visit-title').textContent = lastAroundLabel;
   }
 
-  const lat = lastAroundCoord.x, lon = lastAroundCoord.y;
-  content.innerHTML = `
-    <p class="meta-txt" style="margin:0 20px 10px; font-family:'IBM Plex Mono',monospace;">
+  body.innerHTML = `
+    <p class="meta-txt" style="margin:10px 20px 10px; font-family:'IBM Plex Mono',monospace;">
       📍 Recherche autour de ${lat.toFixed(5)}, ${lon.toFixed(5)} —
       <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" style="color:var(--lake);">vérifier sur Maps ↗</a>
     </p>
