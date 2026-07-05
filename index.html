@@ -1,1 +1,1977 @@
 
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Itinéraire CH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F7F5F0; --paper-raised:#FFFFFF; --ink:#1B2430; --ink-soft:#5B6472;
+    --line:#DEDACE; --coral:#E4572E; --coral-dim:#F4DED4; --lake:#2C6E7F; --lake-dim:#DCEAEC;
+    --leaf:#4C8C4A; --leaf-dim:#E1EEDF; --amber:#C98A1D; --danger:#A31E22; --danger-dim:#F7D6D5;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; background:var(--paper); font-family:'Inter',sans-serif; color:var(--ink);}
+  body{ padding-bottom:env(safe-area-inset-bottom); }
+  .app{ max-width:520px; margin:0 auto; min-height:100vh; position:relative; padding-bottom:96px; }
+
+  .topbar{ padding:calc(env(safe-area-inset-top) + 14px) 20px 6px; }
+  .eyebrow{ font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.12em; color:var(--ink-soft); text-transform:uppercase; margin:0 0 2px; display:flex; align-items:center; gap:6px;}
+  .live-dot{ width:7px; height:7px; border-radius:50%; background:var(--coral); animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.25;} }
+  h1.app-title{ font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; margin:0; letter-spacing:-.01em; }
+
+  .flapboard{ margin:14px 20px 8px; background:var(--ink); border-radius:14px; padding:14px 16px; font-family:'IBM Plex Mono',monospace; }
+  .flap-header{ display:flex; justify-content:space-between; color:#8B93A0; font-size:10px; letter-spacing:.1em; text-transform:uppercase; margin-bottom:6px; }
+  .flap-stopgroup{ display:flex; justify-content:space-between; align-items:center; padding:11px 0 5px; color:#C7CCD4; font-size:11.5px; font-weight:600; }
+  .flap-direction-label{ color:#6F7787; font-family:'IBM Plex Mono',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; padding:9px 0 3px; border-top:1px solid rgba(255,255,255,.08); }
+  .flap-direction-grey{ background:rgba(255,255,255,.10); border-radius:8px; margin:0 -8px; padding:2px 8px 4px; }
+  .flap-direction-grey .flap-dest{ color:#FFFFFF; font-weight:700; }
+  .flap-direction-grey .flap-line{ color:#FFFFFF; background:rgba(255,255,255,.14); }
+  .flap-direction-grey .flap-time:not(.delay){ color:#FFFFFF; }
+  .flap-direction-grey .flap-mode{ opacity:1; filter:none; }
+  .flap-direction-label:first-child{ border-top:none; padding-top:2px; }
+  .flap-stopgroup:first-of-type{ padding-top:2px; }
+  .flap-stopgroup .stop-dist{ color:#6F7787; font-weight:500; }
+  .flap-row{ display:flex; align-items:center; gap:9px; padding:7px 0; border-top:1px solid rgba(255,255,255,.08); }
+  .flap-time{ background:#0E1116; color:#FFFFFF; font-weight:700; font-size:14px; padding:4px 6px; border-radius:5px; min-width:48px; text-align:center; flex-shrink:0; }
+  .flap-time.delay{ color:var(--coral); }
+  .flap-mode{ width:24px; height:24px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; }
+  .mode-train{background:var(--coral);} .mode-bus{background:var(--lake);} .mode-boat{background:#3A6EA5;} .mode-tram{background:#7B5EA7;}
+  .flap-dest{ color:#FFFFFF; font-size:12.5px; font-weight:700; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .flap-line{ color:#FFFFFF; font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:700; background:rgba(255,255,255,.14); padding:2px 7px; border-radius:6px; flex-shrink:0; }
+  .flap-badge{ font-size:9.5px; padding:2px 6px; border-radius:20px; font-weight:600; flex-shrink:0; }
+  .badge-ontime{ background:rgba(76,140,74,.3); color:#B7F0B4; font-weight:700; }
+  .badge-delay{ background:rgba(228,87,46,.3); color:#FFC4AE; font-weight:700; }
+  .quai-info{ color:#E8E6DE; }
+  .flap-direction-grey .quai-info{ color:#E8E6DE; }
+  .flap-empty{ color:#8B93A0; font-size:12px; padding:8px 0; }
+  .flap-loading{ color:#8B93A0; font-size:12px; padding:8px 0; font-family:'Inter',sans-serif; }
+
+  .geo-banner{
+    margin:10px 20px; padding:12px 14px; background:var(--lake-dim); border-radius:12px;
+    font-size:12.5px; color:#1B4C57; display:flex; gap:9px; align-items:center; justify-content:space-between;
+  }
+  .geo-banner button{ background:var(--lake); color:#fff; border:none; border-radius:9px; padding:7px 12px; font-size:12px; font-weight:600; font-family:'Inter',sans-serif; flex-shrink:0; }
+  .geo-banner.error{ background:var(--danger-dim); color:#7A2A26; }
+  .geo-banner.error button{ background:var(--danger); }
+
+  .card{ margin:14px 20px; background:var(--paper-raised); border-radius:18px; padding:16px; border:1px solid var(--line); position:relative; }
+  .field{ display:flex; align-items:center; gap:10px; padding:12px 4px; border-bottom:1px solid var(--line); position:relative; }
+  .field:last-of-type{ border-bottom:none; }
+  .field .dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .dot-from{ background:var(--ink); } .dot-to{ background:var(--coral); }
+  .field input{ border:none; outline:none; background:none; font-family:'Inter',sans-serif; font-size:15px; font-weight:500; color:var(--ink); flex:1; padding:0; min-width:0; }
+  .field input::placeholder{ color:var(--ink-soft); font-weight:400; }
+  .geo-btn{ width:30px; height:30px; border-radius:9px; background:var(--lake-dim); color:var(--lake); display:flex; align-items:center; justify-content:center; font-size:14px; border:none; flex-shrink:0; }
+
+  .autocomplete{
+    position:absolute; top:100%; left:0; right:0; background:var(--paper-raised); border:1px solid var(--line);
+    border-radius:12px; margin-top:4px; box-shadow:0 10px 26px rgba(0,0,0,.12); z-index:60; max-height:220px; overflow-y:auto; display:none;
+  }
+  .autocomplete.show{ display:block; }
+  .ac-item{ padding:11px 14px; font-size:14px; border-bottom:1px solid var(--line); cursor:pointer; display:flex; align-items:center; gap:8px; }
+  .ac-item:last-child{ border-bottom:none; }
+  .ac-item:active{ background:var(--paper); }
+  .ac-item .ac-dist{ margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-soft); flex-shrink:0; }
+
+  .btn-primary{ width:100%; background:var(--ink); color:var(--paper); border:none; border-radius:14px; padding:14px; font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:15px; margin-top:10px; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .btn-primary:disabled{ opacity:.5; }
+  .btn-primary span.arrow{ color:var(--coral); }
+  .btn-secondary{ width:100%; background:none; color:var(--ink); border:1px solid var(--line); border-radius:14px; padding:12px; font-family:'Inter',sans-serif; font-weight:600; font-size:14px; }
+
+  .section-label{ font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-soft); margin:20px 20px 10px; }
+
+  .back-row{ display:flex; align-items:center; gap:12px; padding:calc(env(safe-area-inset-top) + 14px) 20px 4px; }
+  .back-btn{ width:34px; height:34px; border-radius:10px; background:var(--paper-raised); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+
+  .trip-card{ margin:0 20px 14px; background:var(--paper-raised); border-radius:16px; border:1px solid var(--line); overflow:hidden; cursor:pointer; }
+  .trip-top{ display:flex; justify-content:space-between; align-items:center; padding:14px 16px 8px; }
+  .trip-duration{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:17px; }
+  .trip-time{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-soft); }
+  .trip-legs{ display:flex; align-items:center; gap:6px; padding:0 16px 14px; flex-wrap:wrap; }
+  .leg-pill{ display:flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; padding:5px 9px; border-radius:9px; color:#fff; }
+  .leg-sep{ color:var(--ink-soft); font-size:11px; }
+  .leg-walk{ color:var(--ink-soft); font-weight:500; font-size:11.5px; }
+
+  .step{ display:flex; gap:12px; margin:0 20px; padding:2px 0 20px; position:relative; }
+  .step::before{ content:''; position:absolute; left:12px; top:26px; bottom:0; width:2px; background:var(--line); }
+  .step:last-child::before{ display:none; }
+  .step-dot{ width:26px; height:26px; border-radius:50%; flex-shrink:0; z-index:2; display:flex; align-items:center; justify-content:center; font-size:12px; color:#fff; }
+  .step-title{ font-weight:600; font-size:14px; }
+  .step-sub{ font-size:12.5px; color:var(--ink-soft); margin-top:2px; }
+  .step-time{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft); margin-top:3px; }
+
+  .divider-note{ margin:6px 20px 18px; padding:10px 12px; background:var(--lake-dim); border-radius:10px; font-size:12px; color:#1B4C57; display:flex; gap:8px; align-items:flex-start; }
+  .transfer-map-btn{ margin-top:7px; background:var(--lake-dim); color:#1B4C57; border:none; border-radius:9px; padding:7px 11px; font-family:'Inter',sans-serif; font-size:11.5px; font-weight:600; }
+
+  .sort-row{ display:flex; gap:8px; padding:12px 20px 8px; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .chip{ font-family:'Inter',sans-serif; font-size:12.5px; font-weight:500; white-space:nowrap; padding:8px 13px; border-radius:20px; background:var(--paper-raised); border:1px solid var(--line); color:var(--ink-soft); flex-shrink:0; }
+  .chip.active{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
+  .value-note{ margin:0 20px 12px; font-size:11px; color:var(--ink-soft); line-height:1.4; }
+
+  .agenda-card{ margin:14px 20px; background:#1B2430; border-radius:16px; padding:15px 16px; color:#fff; }
+  .agenda-title{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:14px; }
+  .agenda-sub{ font-size:12px; color:#C7CCD4; margin-top:5px; line-height:1.4; }
+  .agenda-link{ display:inline-block; margin-top:10px; font-size:12.5px; font-weight:600; color:#fff; background:rgba(255,255,255,.12); padding:7px 12px; border-radius:9px; }
+
+  .place-card{ display:flex; gap:12px; margin:0 20px 12px; background:var(--paper-raised); border:1px solid var(--line); border-radius:16px; padding:12px; }
+  .place-card.top-value{ border-color:#E8B94A; box-shadow:0 0 0 1px #E8B94A inset; }
+  .place-thumb{ width:52px; height:52px; border-radius:12px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:20px; background:var(--coral-dim); }
+  .place-info{ flex:1; min-width:0; }
+  .place-name{ font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14px; }
+  .place-meta{ display:flex; align-items:center; gap:6px; margin-top:3px; flex-wrap:wrap; }
+  .rating{ font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; color:var(--amber); }
+  .dot-sep{ width:3px; height:3px; border-radius:50%; background:var(--ink-soft); }
+  .meta-txt{ font-size:11.5px; color:var(--ink-soft); }
+  .status-open{ color:var(--leaf); font-weight:600; font-size:11.5px; }
+  .status-closed{ color:var(--coral); font-weight:600; font-size:11.5px; }
+  .value-badge{ display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:700; color:#8A5A00; background:#FCEBC8; padding:3px 8px; border-radius:20px; margin-top:5px; }
+
+  .place-detail-modal{ position:fixed; inset:0; z-index:300; display:none; }
+  .place-detail-modal.show{ display:block; }
+  .place-detail-backdrop{ position:absolute; inset:0; background:rgba(27,36,48,.5); }
+  .place-detail-sheet{
+    position:absolute; left:0; right:0; bottom:0; max-width:520px; margin:0 auto;
+    background:var(--paper); border-radius:20px 20px 0 0; padding:22px 20px calc(env(safe-area-inset-bottom) + 20px);
+    max-height:80vh; overflow-y:auto;
+  }
+  .place-detail-close{ position:absolute; top:14px; right:16px; width:30px; height:30px; border-radius:50%; background:var(--paper-raised); border:1px solid var(--line); font-size:14px; }
+
+  .maps-cta{ margin:0 20px 20px; background:none; border:1px dashed var(--ink-soft); color:var(--ink-soft); border-radius:12px; padding:11px; font-family:'Inter',sans-serif; font-size:12.5px; text-align:center; }
+
+  .live-map-wrap{ position:relative; margin:0 20px 16px; height:160px; border-radius:16px; overflow:hidden; border:1px solid var(--line); }
+  .live-map-canvas{ width:100%; height:100%; }
+  .live-map-badge{
+    position:absolute; top:10px; left:10px; z-index:5; background:rgba(27,36,48,.85); color:#fff;
+    font-family:'IBM Plex Mono',monospace; font-size:10px; padding:5px 9px; border-radius:20px;
+    display:flex; align-items:center; gap:5px;
+  }
+  .live-dot-red{ width:7px; height:7px; border-radius:50%; background:var(--coral); animation:pulse 1.4s ease-in-out infinite; }
+
+  .bottom-nav{ position:fixed; bottom:0; left:0; right:0; max-width:520px; margin:0 auto; background:rgba(247,245,240,.94); backdrop-filter:blur(10px); border-top:1px solid var(--line); display:flex; padding:10px 10px calc(env(safe-area-inset-bottom) + 10px); }
+  .nav-item{ flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; font-family:'Inter',sans-serif; font-size:10.5px; font-weight:600; color:var(--ink-soft); background:none; border:none; padding:6px 0; }
+  .nav-item .ic{ font-size:19px; }
+  .nav-item.active{ color:var(--coral); }
+
+  .screen{ display:none; }
+  .screen.active{ display:block; }
+
+  .spinner{ width:16px; height:16px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  .toast{ position:fixed; bottom:100px; left:20px; right:20px; max-width:480px; margin:0 auto; background:var(--ink); color:#fff; padding:12px 16px; border-radius:12px; font-size:13px; text-align:center; opacity:0; transform:translateY(10px); transition:.3s; pointer-events:none; z-index:200; }
+  .toast.show{ opacity:1; transform:translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ============ ÉCRAN ACCUEIL ============ -->
+  <div class="screen active" id="screen-home">
+    <div class="topbar">
+      <p class="eyebrow" id="geo-label"><span class="live-dot"></span>Localisation…</p>
+      <h1 class="app-title">Départs près de vous</h1>
+    </div>
+
+    <div id="geo-banner-slot"></div>
+
+    <div class="sort-row" id="home-time-row" style="padding:8px 20px 4px;">
+      <div class="chip" onclick="shiftHomeTime(-5)">− 5 min</div>
+      <div class="chip active" id="home-time-label" onclick="resetHomeTime()">🕐 Maintenant</div>
+      <div class="chip" onclick="shiftHomeTime(5)">+ 5 min</div>
+    </div>
+
+    <div class="flapboard" id="flapboard">
+      <div class="flap-header"><span>Arrêts à proximité</span><span>Temps réel</span></div>
+      <div class="flap-loading">En attente de votre position…</div>
+    </div>
+
+    <div class="card">
+      <div class="field">
+        <div class="dot dot-from"></div>
+        <input type="text" id="input-from" placeholder="Point de départ" value="Ma position actuelle" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" name="depart-libre">
+        <button class="geo-btn" onclick="useCurrentLocation()">◎</button>
+        <div class="autocomplete" id="autocomplete-from"></div>
+      </div>
+      <div class="field">
+        <div class="dot dot-to"></div>
+        <input type="text" id="input-to" placeholder="Destination — rue, arrêt, lieu…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" name="destination-libre">
+        <div class="autocomplete" id="autocomplete-to"></div>
+      </div>
+
+      <div class="sort-row" id="time-mode-row" style="padding:8px 0 0;">
+        <div class="chip active" data-timemode="depart">🕐 Partir maintenant</div>
+        <div class="chip" data-timemode="arrive">🎯 Arriver à…</div>
+      </div>
+      <div id="time-picker-row" style="display:none; gap:8px; padding:10px 0 0; flex-direction:column;">
+        <div style="display:flex; gap:8px;">
+          <input type="date" id="input-arrive-date" style="flex:1; border:1px solid var(--line); border-radius:10px; padding:9px; font-family:'Inter',sans-serif; font-size:13px; color:var(--ink); background:var(--paper-raised);">
+          <input type="time" id="input-arrive-time" style="flex:1; border:1px solid var(--line); border-radius:10px; padding:9px; font-family:'Inter',sans-serif; font-size:13px; color:var(--ink); background:var(--paper-raised);">
+        </div>
+        <p class="value-note" style="margin:8px 0 4px;">Marge avant le rendez-vous (pour ne pas arriver pile à l'heure) :</p>
+        <div class="sort-row" id="buffer-row" style="padding:0;">
+          <div class="chip" data-buffer="0">Pile à l'heure</div>
+          <div class="chip" data-buffer="10">10 min</div>
+          <div class="chip active" data-buffer="15">15 min</div>
+          <div class="chip" data-buffer="20">20 min</div>
+          <div class="chip" data-buffer="30">30 min</div>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="btn-search" onclick="searchTrips()">Voir les trajets <span class="arrow">→</span></button>
+    </div>
+
+    <p class="section-label" id="usage-counter" style="cursor:pointer;" onclick="showUsageDetail()">📊 Compteur d'usage Google (indicatif)</p>
+  </div>
+
+  <!-- ============ ÉCRAN RÉSULTATS ============ -->
+  <div class="screen" id="screen-results">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('home')">←</button>
+      <div style="min-width:0;">
+        <p class="eyebrow" id="results-route" style="margin:0;">—</p>
+        <h1 class="app-title" style="font-size:19px;" id="results-title">Recherche…</h1>
+      </div>
+    </div>
+    <div id="results-list" style="padding-top:8px;"></div>
+  </div>
+
+  <!-- ============ ÉCRAN DÉTAIL TRAJET ============ -->
+  <div class="screen" id="screen-detail">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('results')">←</button>
+      <div>
+        <p class="eyebrow" id="detail-arrival" style="margin:0;">—</p>
+        <h1 class="app-title" style="font-size:19px;" id="detail-duration">—</h1>
+      </div>
+    </div>
+    <div class="live-map-wrap">
+      <div class="live-map-badge" id="live-map-badge"><span class="live-dot-red"></span>Position en direct</div>
+      <div class="live-map-canvas" id="live-map-canvas"></div>
+    </div>
+    <div class="divider-note">
+      ⓘ Horaires en temps réel CFF/TL. En cas de perturbation signalée par l'opérateur, le retard apparaît directement sur les étapes ci-dessous.
+    </div>
+    <div id="detail-steps"></div>
+    <button class="maps-cta" id="maps-cta-btn">🗺️ Ouvrir l'itinéraire à pied dans Maps</button>
+    <button class="maps-cta" id="restos-cta-btn" onclick="showScreen('around')" style="border-style:solid; background:var(--coral-dim); color:#9A3D22; font-weight:600;">🍽️ Voir les restaurants à la destination</button>
+    <button class="maps-cta" id="calendar-cta-btn" style="border-style:solid; background:var(--lake-dim); color:#1B4C57; font-weight:600;">📅 Ajouter ce trajet au calendrier (alertes 5 min)</button>
+  </div>
+
+  <div class="screen" id="screen-around">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('home')">←</button>
+      <div style="min-width:0;">
+        <p class="eyebrow" id="around-eyebrow" style="margin:0;">Autour de…</p>
+        <h1 class="app-title" style="font-size:19px;" id="around-title">—</h1>
+      </div>
+    </div>
+    <div id="around-content"></div>
+  </div>
+
+  <div class="screen" id="screen-visit">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('home')">←</button>
+      <div style="min-width:0;">
+        <p class="eyebrow" id="visit-eyebrow" style="margin:0;">À voir autour de…</p>
+        <h1 class="app-title" style="font-size:19px;" id="visit-title">—</h1>
+      </div>
+    </div>
+    <div id="visit-content"></div>
+  </div>
+
+  <div class="screen" id="screen-station">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('home')">←</button>
+      <div style="min-width:0; flex:1;">
+        <p class="eyebrow" style="margin:0;">🔴 Départs en direct</p>
+        <h1 class="app-title" style="font-size:19px;">Gare</h1>
+      </div>
+      <button class="back-btn" onclick="loadStationScreen(true)" title="Actualiser ma position">🔄</button>
+    </div>
+    <div class="sort-row" id="gare-time-row" style="padding:8px 20px 4px;">
+      <div class="chip" onclick="shiftGareTime(-5)">− 5 min</div>
+      <div class="chip active" id="gare-time-label" onclick="resetGareTime()">🕐 Maintenant</div>
+      <div class="chip" onclick="shiftGareTime(5)">+ 5 min</div>
+    </div>
+    <div class="card" style="position:relative;">
+      <div class="field">
+        <div class="dot dot-from"></div>
+        <input type="text" id="input-station" placeholder="Nom de la ville, ex: Lausanne" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" name="ville-libre">
+        <div class="autocomplete" id="autocomplete-station"></div>
+      </div>
+    </div>
+    <p class="value-note" style="margin:0 20px 10px;">Tapez le nom d'une ville (pas "gare" en plus — juste le nom, ex. "Lausanne"), sélectionnez-la dans la liste. Tableau des départs (trains uniquement), actualisé automatiquement toutes les 45 s. Il n'existe pas de tableau des arrivées séparé dans les données suisses officielles — comme sur les vrais écrans de gare, ce sont les départs qui comptent pour savoir où aller.</p>
+    <div id="station-board"></div>
+  </div>
+
+  <div class="screen" id="screen-shop">
+    <div class="back-row">
+      <button class="back-btn" onclick="showScreen('home')">←</button>
+      <div style="min-width:0; flex:1;">
+        <p class="eyebrow" style="margin:0;">🛒 Commerces autour de vous</p>
+        <h1 class="app-title" style="font-size:19px;">Magasin</h1>
+      </div>
+      <button class="back-btn" onclick="loadShopScreen()" title="Actualiser ma position">🔄</button>
+    </div>
+    <div id="shop-content"></div>
+  </div>
+
+  <div class="bottom-nav">
+    <button class="nav-item active" data-nav="home" onclick="showScreen('home')"><span class="ic">🧭</span>Trajet</button>
+    <button class="nav-item" data-nav="around" onclick="showScreen('around')"><span class="ic">🍽️</span>Restos</button>
+    <button class="nav-item" data-nav="visit" onclick="showScreen('visit')"><span class="ic">🏛️</span>À voir</button>
+    <button class="nav-item" data-nav="station" onclick="showScreen('station')"><span class="ic">🚉</span>Gare</button>
+    <button class="nav-item" data-nav="shop" onclick="showScreen('shop')"><span class="ic">🛒</span>Magasin</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="place-detail-modal" id="place-detail-modal">
+  <div class="place-detail-backdrop" onclick="closePlaceDetail()"></div>
+  <div class="place-detail-sheet">
+    <button class="place-detail-close" onclick="closePlaceDetail()">✕</button>
+    <div id="place-detail-body"></div>
+  </div>
+</div>
+
+<script>
+  // Chargement asynchrone de Google Maps — la clé est restreinte au domaine GitHub Pages de Marcel
+  window.__gmapsReady = new Promise(resolve => { window.initMapsSDK = resolve; });
+</script>
+<script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA4bGraPQ65Dp1b6Ph2FXc9y3W8u_LsPgw&libraries=places&callback=initMapsSDK"></script>
+
+<script>
+const API = 'https://transport.opendata.ch/v1';
+const GOOGLE_MAPS_API_KEY = 'AIzaSyA4bGraPQ65Dp1b6Ph2FXc9y3W8u_LsPgw'; // même clé que le script Maps chargé en tête de page
+const MYSWITZERLAND_API_KEY = 'sd5Rc8HWSo2Y7ELCI2Z3LYM6oqltQD07Hc4Rdn8h';
+let userCoords = null;      // {lat, lon}
+let nearbyStations = [];    // list from /locations
+let selectedDestination = null; // {id, name, coordinate}
+let selectedPlaceWalk = null;   // {placeName, coordinate, stops} — quand la destination est un lieu Google Places résolu vers un arrêt
+let selectedOrigin = null;      // {id, name} — si l'utilisateur choisit un départ précis, sinon on garde l'arrêt géolocalisé
+let currentConnections = [];
+let lastFromLabel = '', lastFromDistanceMeters = null, lastFromCoordinate = null; // mémorise le départ réellement utilisé lors de la recherche
+let lastAroundCoord = null, lastAroundLabel = ''; // destination de référence pour l'écran "Autour"
+let aroundPlaces = []; // résultats resto en cache pour retri sans nouvel appel réseau
+
+// ---------- Utilitaires ----------
+function showToast(msg, ms){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=> t.classList.remove('show'), ms || 3000);
+}
+
+// ---------- Compteur d'usage local (indicatif uniquement — voir Google Cloud Console pour les vrais chiffres) ----------
+function bumpUsage(key){
+  const n = parseInt(localStorage.getItem(key) || '0', 10) + 1;
+  localStorage.setItem(key, n);
+  updateUsageLabel();
+}
+function updateUsageLabel(){
+  const maps = localStorage.getItem('usage_map_loads') || 0;
+  const places = localStorage.getItem('usage_places_calls') || 0;
+  const el = document.getElementById('usage-counter');
+  if(el) el.textContent = `📊 ${maps} carte(s) · ${places} recherche(s) de lieux (indicatif, depuis l'installation)`;
+}
+function showUsageDetail(){
+  showToast("Ce compteur est purement local et approximatif. Pour les vrais chiffres et un contrôle fiable, consulte Google Cloud Console → APIs & Services → Tableau de bord (ou configure une alerte de budget).", 6000);
+}
+document.addEventListener('DOMContentLoaded', updateUsageLabel);
+
+// ---------- Carte en direct (Google Maps) ----------
+let liveMap = null, liveMarkerYou = null, liveMarkerDest = null, liveDirRenderer = null, liveWatchId = null;
+
+async function renderLiveMap(destCoordX, destCoordY, destName){
+  await window.__gmapsReady;
+  const destLatLng = { lat: parseFloat(destCoordX), lng: parseFloat(destCoordY) };
+  const origin = userCoords ? { lat: userCoords.lat, lng: userCoords.lon } : destLatLng;
+
+  if(!liveMap){
+    liveMap = new google.maps.Map(document.getElementById('live-map-canvas'), {
+      center: origin, zoom: 15, disableDefaultUI: true, gestureHandling: 'greedy'
+    });
+    liveDirRenderer = new google.maps.DirectionsRenderer({ map: liveMap, suppressMarkers: true, polylineOptions: { strokeColor:'#1B2430', strokeWeight:3 } });
+    bumpUsage('usage_map_loads');
+  }
+
+  if(liveMarkerYou) liveMarkerYou.setMap(null);
+  if(liveMarkerDest) liveMarkerDest.setMap(null);
+
+  liveMarkerYou = new google.maps.Marker({
+    position: origin, map: liveMap, title: 'Vous',
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor:'#1B2430', fillOpacity:1, strokeColor:'#fff', strokeWeight:3 }
+  });
+  liveMarkerDest = new google.maps.Marker({
+    position: destLatLng, map: liveMap, title: destName || 'Destination',
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor:'#E4572E', fillOpacity:1, strokeColor:'#fff', strokeWeight:3 }
+  });
+
+  const bounds = new google.maps.LatLngBounds();
+  bounds.extend(origin); bounds.extend(destLatLng);
+  liveMap.fitBounds(bounds, 40);
+
+  if(userCoords){
+    const dirService = new google.maps.DirectionsService();
+    dirService.route({ origin, destination: destLatLng, travelMode: google.maps.TravelMode.WALKING }, (result, status) => {
+      if(status === 'OK') liveDirRenderer.setDirections(result);
+    });
+  }
+
+  // Suivi GPS en direct : le marqueur "vous" avance tant que l'écran détail est ouvert
+  if(liveWatchId) navigator.geolocation.clearWatch(liveWatchId);
+  if('geolocation' in navigator){
+    liveWatchId = navigator.geolocation.watchPosition(pos => {
+      const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      userCoords = { lat: p.lat, lon: p.lng };
+      if(liveMarkerYou) liveMarkerYou.setPosition(p);
+    }, () => {}, { enableHighAccuracy:true });
+  }
+}
+
+function stopLiveMapTracking(){
+  if(liveWatchId){ navigator.geolocation.clearWatch(liveWatchId); liveWatchId = null; }
+}
+
+function showScreen(name){
+  if(name !== 'detail') stopLiveMapTracking();
+  if(name !== 'station'){ stopStationBoardRefresh(); stopGareLocationWatch(); }
+  if(name !== 'home') stopHomeBoardRefresh(); else if(nearbyStations.length > 0) startHomeBoardRefresh();
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const map = {home:'home', results:'home', detail:'home'};
+  const btn = document.querySelector('[data-nav="'+(map[name]||name)+'"]');
+  if(btn) btn.classList.add('active');
+  window.scrollTo(0,0);
+  if(name === 'around') loadAroundScreen();
+  if(name === 'visit') loadVisitScreen();
+  if(name === 'station') loadStationScreen();
+  if(name === 'shop') loadShopScreen();
+}
+
+// Distance à vol d'oiseau (Haversine) — utilisée uniquement pour estimer un temps de marche indicatif
+function haversineMeters(lat1, lon1, lat2, lon2){
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function walkMinutes(meters){ return Math.max(1, Math.round(meters / 80)); } // ~4.8 km/h
+
+// Calcule, pour un départ donné, si on peut encore l'attraper à pied depuis la position actuelle,
+// et surtout À QUELLE HEURE il faut partir — plus utile qu'un simple "trop juste" après coup.
+function getReachability(coordinate, departureIso){
+  if(!coordinate || !userCoords) return null;
+  const distM = haversineMeters(userCoords.lat, userCoords.lon, coordinate.x, coordinate.y);
+  const neededWalkMin = walkMinutes(distM);
+  const depTime = new Date(departureIso);
+  const minutesUntilDep = (depTime - new Date()) / 60000;
+  const slack = minutesUntilDep - neededWalkMin;
+  const leaveBy = new Date(depTime.getTime() - neededWalkMin * 60000);
+  let status = 'ok';
+  if(slack < 0) status = 'unreachable';
+  else if(slack < 2) status = 'urgent';
+  return { status, neededWalkMin, minutesUntilDep: Math.max(0, Math.round(minutesUntilDep)), leaveByTxt: fmtTime(leaveBy.toISOString()) };
+}
+
+function reachabilityNoteHtml(r, indent){
+  if(!r) return '';
+  const pad = indent || 91;
+  if(r.status === 'unreachable'){
+    return `<div style="padding:0 0 6px ${pad}px; font-size:10.5px; color:var(--amber); font-family:'IBM Plex Mono',monospace;">⚠️ Trop juste : ≈ ${r.neededWalkMin} min de marche, ${r.minutesUntilDep} min restantes</div>`;
+  }
+  if(r.status === 'urgent'){
+    return `<div style="padding:0 0 6px ${pad}px; font-size:10.5px; color:var(--coral); font-family:'IBM Plex Mono',monospace; font-weight:600;">🏃 Partez maintenant pour l'attraper !</div>`;
+  }
+  return `<div style="padding:0 0 6px ${pad}px; font-size:10.5px; color:var(--leaf); font-family:'IBM Plex Mono',monospace;">✅ Partez avant ${r.leaveByTxt} pour l'attraper</div>`;
+}
+
+function iconForCategory(cat){
+  if(!cat) return {icon:'🚌', cls:'mode-bus'};
+  const c = cat.toUpperCase();
+  if(['IC','IR','RE','R','EC','TGV','ICE','S','SN','EXT'].includes(c)) return {icon:'🚆', cls:'mode-train'};
+  if(['T','TRAM'].includes(c)) return {icon:'🚊', cls:'mode-tram'};
+  if(['BAT','SHIP','SCH'].includes(c)) return {icon:'⛴', cls:'mode-boat'};
+  return {icon:'🚌', cls:'mode-bus'};
+}
+
+function fmtTime(iso){
+  if(!iso) return '--:--';
+  const d = new Date(iso);
+  return d.toLocaleTimeString('fr-CH', {hour:'2-digit', minute:'2-digit'});
+}
+
+function computeDelayMin(stop){
+  // stop.delay est en minutes si dispo (objet 'stop' des connexions/stationboard)
+  if(stop && typeof stop.delay === 'number') return stop.delay;
+  return 0;
+}
+
+// ---------- Géolocalisation + tableau des départs ----------
+function initGeolocation(){
+  if(!('geolocation' in navigator)){
+    renderGeoError("La géolocalisation n'est pas disponible sur cet appareil.");
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      userCoords = {lat: pos.coords.latitude, lon: pos.coords.longitude};
+      document.getElementById('geo-label').innerHTML = '<span class="live-dot"></span>Position détectée';
+      document.getElementById('geo-banner-slot').innerHTML = '';
+      loadNearbyDepartures();
+      startHomeBoardRefresh();
+    },
+    err => {
+      let msg = "Impossible d'obtenir votre position.";
+      if(err.code === err.PERMISSION_DENIED) msg = "Localisation refusée — autorisez-la dans les réglages Safari pour voir vos départs.";
+      renderGeoError(msg);
+    },
+    { enableHighAccuracy:true, timeout:10000 }
+  );
+}
+
+// Actualisation automatique du tableau des départs proches, tant qu'on reste sur l'écran d'accueil
+let homeBoardInterval = null;
+let formFieldFocused = false;
+
+function startHomeBoardRefresh(){
+  stopHomeBoardRefresh();
+  homeBoardInterval = setInterval(async () => {
+    if(formFieldFocused) return; // on ne dérange pas une saisie en cours
+    const fresh = await getFreshPosition();
+    if(fresh) userCoords = fresh;
+    if(nearbyStations.length > 0) loadNearbyDepartures();
+  }, 45000);
+}
+function stopHomeBoardRefresh(){
+  if(homeBoardInterval){ clearInterval(homeBoardInterval); homeBoardInterval = null; }
+}
+
+function renderGeoError(msg){
+  document.getElementById('geo-label').innerHTML = '📍 Position indisponible';
+  document.getElementById('geo-banner-slot').innerHTML =
+    '<div class="geo-banner error"><span>' + msg + '</span><button onclick="initGeolocation()">Réessayer</button></div>';
+  document.getElementById('flapboard').innerHTML =
+    '<div class="flap-header"><span>Arrêts à proximité</span><span>—</span></div>' +
+    '<div class="flap-empty">Activez la localisation pour voir les départs autour de vous.</div>';
+}
+
+// Décalage temporel du tableau d'accueil (même principe que sur l'écran Gare)
+let homeTimeOffsetMin = 0;
+
+function updateHomeTimeLabel(){
+  const label = document.getElementById('home-time-label');
+  if(!label) return;
+  label.textContent = homeTimeOffsetMin === 0 ? '🕐 Maintenant' : `🕐 +${homeTimeOffsetMin} min`;
+}
+
+function shiftHomeTime(deltaMin){
+  homeTimeOffsetMin = Math.max(0, homeTimeOffsetMin + deltaMin);
+  updateHomeTimeLabel();
+  loadNearbyDepartures();
+}
+
+function resetHomeTime(){
+  homeTimeOffsetMin = 0;
+  updateHomeTimeLabel();
+  loadNearbyDepartures();
+}
+
+async function loadNearbyDepartures(){
+  const board = document.getElementById('flapboard');
+  board.innerHTML = '<div class="flap-header"><span>Arrêts à proximité</span><span>Temps réel</span></div><div class="flap-loading">Recherche des arrêts proches…</div>';
+  try{
+    const res = await fetch(`${API}/locations?x=${userCoords.lat}&y=${userCoords.lon}&type=station`);
+    const data = await res.json();
+    nearbyStations = (data.stations || []).filter(s => s.id).slice(0, 2);
+    if(nearbyStations.length === 0){
+      board.innerHTML = '<div class="flap-header"><span>Arrêts à proximité</span><span>—</span></div><div class="flap-empty">Aucun arrêt trouvé à proximité.</div>';
+      return;
+    }
+    const groupsHtml = await Promise.all(nearbyStations.map(renderStationGroup));
+    board.innerHTML = '<div class="flap-header"><span>' + nearbyStations.length + ' arrêt(s) à proximité</span><span>Temps réel</span></div>' + groupsHtml.join('');
+  } catch(e){
+    board.innerHTML = '<div class="flap-header"><span>Arrêts à proximité</span><span>—</span></div><div class="flap-empty">Erreur réseau — tirez pour rafraîchir.</div>';
+  }
+}
+
+async function renderStationGroup(station){
+  const dist = station.distance ? Math.round(station.distance) + ' m · ' + walkMinutes(station.distance) + "′" : '';
+  let bodyHtml = '<div class="flap-empty">Aucun départ imminent.</div>';
+  let directionSuffix = '';
+  try{
+    // On récupère large (20), puis on regroupe PAR QUAI quand l'info existe (vue d'ensemble de la
+    // place en un coup d'œil), sinon par direction — plutôt que de tout mélanger trié par heure.
+    const dtParam = homeTimeOffsetMin !== 0 ? `&datetime=${encodeURIComponent(formatOffsetDatetime(homeTimeOffsetMin))}` : '';
+    const res = await fetch(`${API}/stationboard?id=${station.id}&limit=20${dtParam}`);
+    const data = await res.json();
+    const board = data.stationboard || [];
+
+    const groupByQuai = board.some(j => j.stop.platform);
+    const byGroup = new Map();
+    for(const j of board){
+      const key = groupByQuai ? (j.stop.platform ? 'Quai ' + j.stop.platform : 'Quai ?') : (j.to || '?');
+      if(!byGroup.has(key)) byGroup.set(key, []);
+      if(byGroup.get(key).length < 3) byGroup.get(key).push(j); // 3 prochains départs par groupe
+    }
+    // Trie les quais dans l'ordre alphabétique/numérique pour une lecture cohérente de la place
+    const groups = [...byGroup.keys()].sort();
+
+    const previewList = groupByQuai
+      ? groups.join(', ')
+      : groups.slice(0,2).join(', ');
+    directionSuffix = groups.length ? ` <span style="color:#8B93A0; font-weight:500;">${groupByQuai ? previewList : '→ ' + previewList}</span>` : '';
+
+    if(groups.length === 0){
+      bodyHtml = '<div class="flap-empty">Aucun départ imminent.</div>';
+    } else {
+      bodyHtml = groups.map((groupKey, idx) => {
+        const isGrey = idx % 2 === 1;
+        const rows = byGroup.get(groupKey).map(j => {
+          const mode = iconForCategory(j.category);
+          const delay = computeDelayMin(j.stop);
+          const timeCls = delay > 0 ? 'flap-time delay' : 'flap-time';
+          const badge = delay > 0 ? `<span class="flap-badge badge-delay">+${delay} min</span>` : `<span class="flap-badge badge-ontime">à l'heure</span>`;
+          const t = fmtTime(j.stop.departure);
+          const lineNum = j.number || j.category || '';
+
+          const r = getReachability(station.coordinate, j.stop.departure);
+          const reachNote = reachabilityNoteHtml(r);
+          const destStyle = r?.status === 'unreachable' ? 'color:var(--amber); font-weight:700;' : (r?.status === 'urgent' ? 'color:var(--coral); font-weight:700;' : '');
+
+          return `<div class="flap-row">
+            <span class="${timeCls}">${t}</span>
+            <div class="flap-mode ${mode.cls}">${mode.icon}</div>
+            <span class="flap-line">${lineNum}</span>
+            <span class="flap-dest" style="${destStyle}">${j.to || ''}</span>
+            ${badge}
+          </div>${reachNote}`;
+        }).join('');
+        const label = groupByQuai ? groupKey : '→ ' + groupKey;
+        return `<div class="flap-direction-block${isGrey ? ' flap-direction-grey' : ''}"><div class="flap-direction-label">${label}</div>${rows}</div>`;
+      }).join('');
+    }
+  } catch(e){ bodyHtml = '<div class="flap-empty">Erreur de chargement.</div>'; }
+
+  return `<div class="flap-stopgroup"><span>🚏 ${station.name}${directionSuffix}</span><span class="stop-dist">${dist}</span></div>${bodyHtml}`;
+}
+
+function useCurrentLocation(){
+  selectedOrigin = null;
+  document.getElementById('input-from').value = 'Ma position actuelle';
+  showToast('Départ réglé sur votre position actuelle');
+}
+
+// ---------- Autocomplétion (départ + destination) ----------
+document.addEventListener('DOMContentLoaded', () => {
+  setupAutocomplete('input-from', 'autocomplete-from', 'origin');
+  setupAutocomplete('input-to', 'autocomplete-to', 'destination');
+  initGeolocation();
+
+  // Pré-remplit la date du jour pour le sélecteur "Arriver à…"
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('input-arrive-date').value = today;
+
+  ['input-from', 'input-to', 'input-arrive-date', 'input-arrive-time'].forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener('focus', () => { formFieldFocused = true; });
+    el.addEventListener('blur', () => { formFieldFocused = false; });
+  });
+
+  document.querySelectorAll('#time-mode-row .chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('#time-mode-row .chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      const isArrive = chip.dataset.timemode === 'arrive';
+      document.getElementById('time-picker-row').style.display = isArrive ? 'flex' : 'none';
+    });
+  });
+
+  document.querySelectorAll('#buffer-row .chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('#buffer-row .chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+    });
+  });
+});
+
+function setupAutocomplete(inputId, boxId, kind){
+  const input = document.getElementById(inputId);
+  let timer = null;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if(kind === 'origin') selectedOrigin = null;
+    else if(kind === 'destination') selectedDestination = null;
+    if(q.length < 2){ document.getElementById(boxId).classList.remove('show'); return; }
+    timer = setTimeout(() => fetchAutocomplete(q, boxId, inputId, kind), 300);
+  });
+  input.addEventListener('blur', () => setTimeout(() => document.getElementById(boxId).classList.remove('show'), 200));
+}
+
+async function fetchAutocomplete(q, boxId, inputId, kind){
+  const box = document.getElementById(boxId);
+  let stationItems = [];
+  try{
+    const res = await fetch(`${API}/locations?query=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    stationItems = (data.stations || []).filter(s => s.id).slice(0, 4);
+  } catch(e){}
+
+  // La recherche de lieux (restaurants, commerces...) n'a de sens que pour le champ destination de trajet
+  let placeItems = [];
+  if(kind === 'destination' && window.google && google.maps && google.maps.places){
+    try{
+      const { AutocompleteSuggestion } = await google.maps.importLibrary("places");
+      const req = { input: q };
+      if(userCoords) req.locationBias = { center: { lat: userCoords.lat, lng: userCoords.lon }, radius: 15000 };
+      const { suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions(req);
+      bumpUsage('usage_places_calls');
+      placeItems = (suggestions || []).map(s => s.placePrediction).filter(Boolean).slice(0, 4);
+    } catch(e){ /* Places API pas encore activée ou indisponible — on continue avec les arrêts seuls */ }
+  }
+
+  if(stationItems.length === 0 && placeItems.length === 0){ box.classList.remove('show'); return; }
+
+  const stationsHtml = stationItems.map((s, i) => {
+    const distTxt = (userCoords && s.coordinate) ? Math.round(haversineMeters(userCoords.lat, userCoords.lon, s.coordinate.x, s.coordinate.y)) + ' m' : '';
+    return `<div class="ac-item" data-kind="station" data-idx="${i}">
+      <span>${s.type === 'address' ? '📍' : '🚏'} ${s.name}</span>
+      <span class="ac-dist">${distTxt}</span>
+    </div>`;
+  }).join('');
+
+  const placesHtml = placeItems.map((p, i) => {
+    const label = p.text ? p.text.text : (p.mainText ? p.mainText.text : 'Lieu');
+    return `<div class="ac-item" data-kind="place" data-idx="${i}"><span>🍽️ ${label}</span></div>`;
+  }).join('');
+
+  box.innerHTML = stationsHtml + placesHtml;
+
+  box.querySelectorAll('.ac-item[data-kind="station"]').forEach(el => {
+    el.addEventListener('mousedown', async () => {
+      const s = stationItems[parseInt(el.dataset.idx)];
+      document.getElementById(inputId).value = s.name;
+      box.classList.remove('show');
+
+      if(kind === 'origin'){
+        selectedOrigin = { id: s.id, name: s.name, coordinate: s.coordinate };
+        return;
+      }
+
+      if(kind === 'stationboard'){
+        const board = document.getElementById('station-board');
+        board.insertAdjacentHTML('afterbegin', `<div class="flap-loading" id="checking-${s.id}" style="padding:0 20px 10px;">Vérification de "${s.name}" (id: ${s.id})…</div>`);
+        const diag = await checkStationDiagnostic(s.id);
+        document.getElementById('checking-' + s.id)?.remove();
+        if(!diag.hasTrain){
+          const detail = diag.error
+            ? `Erreur réseau : ${diag.error}`
+            : diag.count === 0
+              ? `0 passage renvoyé par l'API pour cet identifiant (${s.id}).`
+              : `${diag.count} passages trouvés, mais aucun train — catégories reçues : ${[...new Set(diag.cats)].join(', ')}`;
+          showToast(`"${s.name}" — ${detail}`, 8000);
+          return;
+        }
+        if(!verifiedGares.some(g => g.id === s.id)){
+          verifiedGares.push({ id: s.id, name: s.name, distance: null, coordinate: s.coordinate });
+          manualGares.push({ id: s.id, name: s.name, distance: null });
+          board.insertAdjacentHTML('beforeend', `<div id="gare-board-${s.id}" style="margin-bottom:14px;"></div>`);
+          refreshOneStationBoard(s.id, s.name, null, s.coordinate);
+        }
+        document.getElementById(inputId).value = '';
+        return;
+      }
+
+      // Un arrêt de transport (🚏) sert directement de destination : pas de marche finale à calculer.
+      if(s.type !== 'address'){
+        selectedDestination = { id: s.id, name: s.name, coordinate: s.coordinate };
+        selectedPlaceWalk = null;
+        return;
+      }
+
+      // Une adresse (📍) — ex. "chemin des Perrettes 19, Ecublens" — nécessite de trouver
+      // l'arrêt le plus proche ET de conserver l'adresse exacte pour la marche finale,
+      // exactement comme pour un restaurant trouvé via Google Places.
+      if(!s.coordinate){
+        selectedDestination = { id: s.id, name: s.name };
+        selectedPlaceWalk = null;
+        showToast("Coordonnées introuvables pour cette adresse — le dernier tronçon à pied ne sera pas affiché.");
+        return;
+      }
+      await resolveAddressDestination(s.coordinate.x, s.coordinate.y, s.name);
+    });
+  });
+
+  box.querySelectorAll('.ac-item[data-kind="place"]').forEach(el => {
+    el.addEventListener('mousedown', async () => {
+      const pred = placeItems[parseInt(el.dataset.idx)];
+      box.classList.remove('show');
+      await resolvePlaceDestination(pred, inputId);
+    });
+  });
+
+  box.classList.add('show');
+}
+
+// Résout n'importe quelle destination finale précise (adresse ou lieu) vers le ou les arrêts
+// de transport public les plus proches, et conserve les coordonnées exactes pour la marche finale.
+async function resolveFinalDestination(lat, lon, label){
+  const res = await fetch(`${API}/locations?x=${lat}&y=${lon}&type=station`);
+  const data = await res.json();
+  const nearStations = (data.stations || []).filter(s => s.id).slice(0, 2);
+  if(nearStations.length === 0){
+    showToast("Aucun arrêt de transport trouvé à proximité de cette destination.");
+    selectedDestination = null;
+    selectedPlaceWalk = null;
+    return;
+  }
+  selectedDestination = { id: nearStations[0].id, name: nearStations[0].name, coordinate: nearStations[0].coordinate };
+  selectedPlaceWalk = {
+    placeName: label,
+    coordinate: { x: lat, y: lon },
+    stops: nearStations.map(s => ({ name: s.name, distance: Math.round(s.distance || 0) }))
+  };
+  const stopsTxt = nearStations.map(s => `${s.name} (${Math.round(s.distance || 0)} m)`).join(' · ');
+  showToast('Arrêt(s) le(s) plus proche(s) : ' + stopsTxt, 4200);
+}
+
+async function resolveAddressDestination(lat, lon, name){
+  try{
+    await resolveFinalDestination(lat, lon, name);
+  } catch(e){
+    showToast("Impossible de localiser précisément cette adresse — réessayez ou choisissez un arrêt directement.");
+  }
+}
+
+// Résout un lieu Google Places (ex. un restaurant) vers l'arrêt de transport public le plus proche
+async function resolvePlaceDestination(pred, inputId){
+  try{
+    const place = pred.toPlace();
+    await place.fetchFields({ fields: ['location','displayName'] });
+    const lat = place.location.lat(), lon = place.location.lng();
+    document.getElementById(inputId).value = place.displayName || document.getElementById(inputId).value;
+    await resolveFinalDestination(lat, lon, place.displayName || '');
+  } catch(e){
+    showToast("Impossible de localiser précisément ce lieu — réessayez ou choisissez un arrêt directement.");
+  }
+}
+
+// ---------- Recherche de trajets ----------
+async function searchTrips(){
+  const destInput = document.getElementById('input-to').value.trim();
+  if(!destInput){ showToast('Indiquez une destination.'); return; }
+  const isArriveModeCheck = document.querySelector('#time-mode-row .chip[data-timemode="arrive"]').classList.contains('active');
+  if(isArriveModeCheck && !document.getElementById('input-arrive-time').value){
+    showToast('Choisissez une heure d\'arrivée souhaitée, ou repassez sur "Partir maintenant".');
+    return;
+  }
+
+  // Départ : priorité à une station précise choisie via l'autocomplétion.
+  // Sinon, on retombe sur l'arrêt géolocalisé le plus proche.
+  let fromId, fromLabel, fromDistanceMeters = null, fromCoordinate = null;
+  if(selectedOrigin){
+    fromId = selectedOrigin.id;
+    fromLabel = selectedOrigin.name;
+    fromCoordinate = selectedOrigin.coordinate || null;
+  } else if(nearbyStations.length > 0){
+    fromId = nearbyStations[0].id;
+    fromLabel = nearbyStations[0].name;
+    fromDistanceMeters = nearbyStations[0].distance || null;
+    fromCoordinate = nearbyStations[0].coordinate || null;
+  } else {
+    showToast("Indiquez un point de départ précis, ou activez la localisation.");
+    return;
+  }
+
+  const btn = document.getElementById('btn-search');
+  btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>';
+
+  const toParam = selectedDestination ? selectedDestination.id : destInput;
+  lastFromLabel = fromLabel;
+  lastFromDistanceMeters = fromDistanceMeters;
+  lastFromCoordinate = fromCoordinate;
+
+  showScreen('results');
+  const isArriveMode = document.querySelector('#time-mode-row .chip[data-timemode="arrive"]').classList.contains('active');
+  let timeParams = '';
+  let routeSuffix = '';
+  if(isArriveMode){
+    const dateVal = document.getElementById('input-arrive-date').value;
+    const timeVal = document.getElementById('input-arrive-time').value;
+    const bufferMin = parseInt(document.querySelector('#buffer-row .chip.active')?.dataset.buffer || '0', 10);
+    if(timeVal){
+      // On vise une arrivée AVANT le rendez-vous (heure moins la marge choisie),
+      // pour ne jamais calculer un trajet qui arrive pile à l'heure sans respirer.
+      const target = new Date(`${dateVal}T${timeVal}:00`);
+      target.setMinutes(target.getMinutes() - bufferMin);
+      const adjDate = target.toISOString().split('T')[0];
+      const adjTime = target.toTimeString().slice(0,5);
+      timeParams = `&date=${adjDate}&time=${adjTime}&isArrivalTime=1`;
+      routeSuffix = bufferMin > 0
+        ? ` · rendez-vous ${timeVal}, visée ${adjTime} (marge ${bufferMin} min)`
+        : ` · arrivée souhaitée ${timeVal}`;
+    }
+  }
+  document.getElementById('results-route').textContent = fromLabel + ' → ' + destInput + routeSuffix;
+  document.getElementById('results-title').textContent = 'Recherche des trajets…';
+  document.getElementById('results-list').innerHTML = '<div class="flap-loading" style="padding:0 20px;">Interrogation des horaires CFF/TL en temps réel…</div>';
+
+  try{
+    const res = await fetch(`${API}/connections?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toParam)}&limit=4${timeParams}`);
+    const data = await res.json();
+    currentConnections = data.connections || [];
+    btn.disabled = false; btn.innerHTML = 'Voir les trajets <span class="arrow">→</span>';
+
+    if(currentConnections.length === 0){
+      document.getElementById('results-title').textContent = 'Aucun trajet trouvé';
+      document.getElementById('results-list').innerHTML = '<div class="flap-empty" style="padding:0 20px;">Vérifiez le nom du départ et de la destination (essayez un nom d\'arrêt précis via la liste proposée).</div>';
+      return;
+    }
+    document.getElementById('results-title').textContent = currentConnections.length + ' trajets trouvés';
+    renderResults(fromLabel, fromDistanceMeters);
+
+    // Mémorise la destination réelle (adresse/lieu précis si connu, sinon l'arrêt d'arrivée)
+    // pour alimenter l'écran "Autour". On repasse par /locations pour être sûr d'avoir
+    // des coordonnées fiables (le champ coordinate direct de /connections n'est pas
+    // toujours présent, comme on l'a déjà vu pour les correspondances).
+    if(selectedPlaceWalk){
+      lastAroundCoord = selectedPlaceWalk.coordinate;
+      lastAroundLabel = selectedPlaceWalk.placeName;
+    } else if(currentConnections[0]){
+      const arrivalName = currentConnections[0].to.station.name;
+      lastAroundLabel = arrivalName;
+      lastAroundCoord = currentConnections[0].to.station.coordinate || null;
+      if(!lastAroundCoord){
+        try{
+          const locRes = await fetch(`${API}/locations?query=${encodeURIComponent(arrivalName)}`);
+          const locData = await locRes.json();
+          lastAroundCoord = locData.stations?.[0]?.coordinate || null;
+        } catch(e2){ lastAroundCoord = null; }
+      }
+    }
+  } catch(e){
+    btn.disabled = false; btn.innerHTML = 'Voir les trajets <span class="arrow">→</span>';
+    document.getElementById('results-title').textContent = 'Erreur réseau';
+    document.getElementById('results-list').innerHTML = '<div class="flap-empty" style="padding:0 20px;">Impossible de contacter le service horaires. Réessayez.</div>';
+  }
+}
+
+function renderResults(fromLabel, fromDistanceMeters){
+  const list = document.getElementById('results-list');
+  const walkToStationMin = fromDistanceMeters ? walkMinutes(fromDistanceMeters) : null;
+
+  list.innerHTML = currentConnections.map((c, idx) => {
+    const dep = fmtTime(c.from.departure);
+    const arr = fmtTime(c.to.arrival);
+    const [h,m,s] = (c.duration || '00d00:00:00').split(/[d:]/).slice(-3);
+    const durParts = c.duration.match(/(\d+)d(\d+):(\d+)/);
+    let durTxt = '';
+    if(durParts){
+      const totalMin = parseInt(durParts[1])*24*60 + parseInt(durParts[2])*60 + parseInt(durParts[3]);
+      durTxt = totalMin >= 60 ? Math.floor(totalMin/60) + ' h ' + (totalMin%60) + ' min' : totalMin + ' min';
+    }
+    const legs = (c.sections || []).filter(s => s.journey).map(s => {
+      const mode = iconForCategory(s.journey.category);
+      return `<span class="leg-pill" style="background:${mode.cls === 'mode-train' ? 'var(--coral)' : mode.cls === 'mode-boat' ? '#3A6EA5' : mode.cls === 'mode-tram' ? '#7B5EA7' : 'var(--lake)'}">${mode.icon} ${s.journey.category}${s.journey.number ? ' '+s.journey.number : ''}</span>`;
+    });
+    const legsHtml = [];
+    if(walkToStationMin) legsHtml.push(`<span class="leg-walk">🚶 ${walkToStationMin}′</span><span class="leg-sep">›</span>`);
+    legs.forEach((l,i) => { legsHtml.push(l); if(i < legs.length-1) legsHtml.push('<span class="leg-sep">›</span>'); });
+
+    return `<div class="trip-card" onclick="showTripDetail(${idx})">
+      <div class="trip-top">
+        <div>
+          <div class="trip-duration">${durTxt}</div>
+          <div class="trip-time">${dep} → ${arr}</div>
+        </div>
+      </div>
+      <div class="trip-legs">${legsHtml.join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+// ---------- Écran "Gare" : tableaux des départs de TOUTES les vraies gares CFF proches, avec retards ----------
+// Principe : on ne fait plus jamais confiance au nom d'un arrêt pour deviner s'il s'agit d'une
+// gare. On vérifie chaque candidat en interrogeant son vrai tableau des départs — seuls ceux qui
+// affichent au moins un vrai train sont retenus et étiquetés "gare".
+let stationBoardInterval = null;
+let verifiedGares = []; // {id, name, distance}
+let manualGares = []; // gares ajoutées à la main — jamais effacées par la recherche automatique
+let lastGareSearchCoords = null; // {lat, lon} — position utilisée lors de la dernière recherche de gares
+const TRAIN_CATEGORIES = ['IC','IR','RE','R','EC','TGV','ICE','S','SN','EXT','NJ','TE2'];
+const GARE_REFRESH_DISTANCE_M = 1500; // au-delà, on considère qu'on a changé de secteur (ex. arrivée en train dans une autre ville)
+
+function stopStationBoardRefresh(){
+  if(stationBoardInterval){ clearInterval(stationBoardInterval); stationBoardInterval = null; }
+}
+
+async function isRealTrainStation(id){
+  try{
+    const res = await fetch(`${API}/stationboard?id=${id}&limit=15`);
+    const data = await res.json();
+    return (data.stationboard || []).some(j => TRAIN_CATEGORIES.includes((j.category || '').toUpperCase()));
+  } catch(e){ return false; }
+}
+
+// Version diagnostique : renvoie le détail de ce que l'API a réellement répondu,
+// pour qu'on voie la vraie cause au lieu de deviner à nouveau.
+async function checkStationDiagnostic(id){
+  try{
+    const res = await fetch(`${API}/stationboard?id=${id}&limit=15`);
+    if(!res.ok) return { hasTrain: false, count: 0, error: `HTTP ${res.status}` };
+    const data = await res.json();
+    const board = data.stationboard || [];
+    const cats = board.map(j => j.category || '?');
+    const hasTrain = cats.some(c => TRAIN_CATEGORIES.includes(c.toUpperCase()));
+    return { hasTrain, count: board.length, cats };
+  } catch(e){
+    return { hasTrain: false, count: 0, error: e.message || String(e) };
+  }
+}
+
+function getFreshPosition(){
+  return new Promise((resolve) => {
+    if(!('geolocation' in navigator)){ resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  });
+}
+
+// Décalage temporel du tableau de gare (en minutes) — permet de consulter un horaire futur réel,
+// pas simulé, via le paramètre "datetime" officiel de l'API.
+let gareTimeOffsetMin = 0;
+
+function formatOffsetDatetime(offsetMin){
+  const d = new Date(Date.now() + offsetMin * 60000);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function updateGareTimeLabel(){
+  const label = document.getElementById('gare-time-label');
+  if(!label) return;
+  label.textContent = gareTimeOffsetMin === 0 ? '🕐 Maintenant' : `🕐 +${gareTimeOffsetMin} min`;
+}
+
+function shiftGareTime(deltaMin){
+  gareTimeOffsetMin = Math.max(0, gareTimeOffsetMin + deltaMin);
+  updateGareTimeLabel();
+  verifiedGares.forEach(g => refreshOneStationBoard(g.id, g.name, g.distance, g.coordinate));
+}
+
+function resetGareTime(){
+  gareTimeOffsetMin = 0;
+  updateGareTimeLabel();
+  verifiedGares.forEach(g => refreshOneStationBoard(g.id, g.name, g.distance, g.coordinate));
+}
+
+async function loadStationScreen(forceRefresh){
+  setupAutocomplete('input-station', 'autocomplete-station', 'stationboard');
+  updateGareTimeLabel();
+  const board = document.getElementById('station-board');
+  board.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Étape 1/3 — Localisation en cours…</div>';
+
+  const freshCoords = await getFreshPosition();
+  if(!freshCoords){
+    board.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Localisation impossible — vérifiez que vous avez autorisé la position pour ce site dans Safari.</div>';
+    return;
+  }
+  userCoords = freshCoords;
+
+  const movedFar = lastGareSearchCoords &&
+    haversineMeters(lastGareSearchCoords.lat, lastGareSearchCoords.lon, freshCoords.lat, freshCoords.lon) > GARE_REFRESH_DISTANCE_M;
+
+  if(verifiedGares.length === 0 || movedFar || forceRefresh){
+    // Étape 2 : coordonnées GPS → nom de la ville (géocodage inversé OpenStreetMap Nominatim — gratuit, sans clé)
+    board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Étape 2/3 — Identification de la ville (${freshCoords.lat.toFixed(4)}, ${freshCoords.lon.toFixed(4)})…</div>`;
+    let cityName = null;
+    try{
+      const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${freshCoords.lat}&lon=${freshCoords.lon}&zoom=12&addressdetails=1&accept-language=fr`);
+      if(!geoRes.ok){
+        board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Échec à l'étape 2 — HTTP ${geoRes.status} depuis OpenStreetMap.</div>`;
+        return;
+      }
+      const geoData = await geoRes.json();
+      const addr = geoData.address || {};
+      cityName = addr.city || addr.town || addr.municipality || addr.village || null;
+      if(!cityName){
+        board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Étape 2 réussie mais aucune ville identifiée à cette position précise. Champs reçus : ${Object.keys(addr).join(', ') || 'aucun'}.</div>`;
+        return;
+      }
+    } catch(e){
+      board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur réseau à l'étape 2 : ${e.message || e}</div>`;
+      return;
+    }
+
+    // Étape 3 : nom de la ville → sa gare CFF, vérifiée
+    board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Étape 3/3 — Ville identifiée : ${cityName}. Recherche de sa gare…</div>`;
+    try{
+      const res = await fetch(`${API}/locations?query=${encodeURIComponent(cityName)}`);
+      const data = await res.json();
+      const candidates = (data.stations || []).filter(s => s.id);
+      candidates.sort((a, b) => {
+        const aExact = a.name.toLowerCase() === cityName.toLowerCase() ? 0 : 1;
+        const bExact = b.name.toLowerCase() === cityName.toLowerCase() ? 0 : 1;
+        return aExact - bExact;
+      });
+
+      let found = null;
+      for(const c of candidates.slice(0, 5)){
+        if(await isRealTrainStation(c.id)){ found = c; break; }
+      }
+
+      if(!found){
+        board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Ville identifiée : ${cityName}. Mais aucune gare avec des trains trouvée sous ce nom parmi ${candidates.length} résultat(s) (${candidates.slice(0,5).map(c=>c.name).join(', ') || 'aucun'}).</div>`;
+        return;
+      }
+
+      const merged = [...manualGares];
+      if(!merged.some(m => m.id === found.id)) merged.push(found);
+      verifiedGares = merged;
+      lastGareSearchCoords = freshCoords;
+    } catch(e){
+      board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur réseau à l'étape 3 : ${e.message || e}</div>`;
+      return;
+    }
+  }
+
+  if(verifiedGares.length === 0){
+    board.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Aucune gare trouvée.</div>';
+    return;
+  }
+
+  board.innerHTML = verifiedGares.map(g => `<div id="gare-board-${g.id}" style="margin-bottom:14px;"></div>`).join('');
+  verifiedGares.forEach(g => refreshOneStationBoard(g.id, g.name, g.distance, g.coordinate));
+
+  stopStationBoardRefresh();
+  stationBoardInterval = setInterval(() => {
+    verifiedGares.forEach(g => refreshOneStationBoard(g.id, g.name, g.distance, g.coordinate));
+  }, 45000);
+
+  startGareLocationWatch();
+}
+
+// Suivi GPS en direct pendant que l'écran Gare est ouvert, pour calculer si on peut encore attraper chaque train
+let gareWatchId = null;
+function startGareLocationWatch(){
+  stopGareLocationWatch();
+  if(!('geolocation' in navigator)) return;
+  gareWatchId = navigator.geolocation.watchPosition(pos => {
+    userCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+  }, () => {}, { enableHighAccuracy: true });
+}
+function stopGareLocationWatch(){
+  if(gareWatchId){ navigator.geolocation.clearWatch(gareWatchId); gareWatchId = null; }
+}
+
+async function refreshOneStationBoard(id, name, distance, coordinate){
+  const slot = document.getElementById('gare-board-' + id);
+  if(!slot) return;
+  try{
+    const dtParam = gareTimeOffsetMin !== 0 ? `&datetime=${encodeURIComponent(formatOffsetDatetime(gareTimeOffsetMin))}` : '';
+    const res = await fetch(`${API}/stationboard?id=${id}&limit=25${dtParam}`);
+    const data = await res.json();
+    const trains = (data.stationboard || []).filter(j => TRAIN_CATEGORIES.includes((j.category || '').toUpperCase()));
+    const distTxt = distance ? ` · ${Math.round(distance)} m` : '';
+
+    if(trains.length === 0){
+      slot.innerHTML = `<div class="flapboard"><div class="flap-header"><span>${name}${distTxt}</span><span>Temps réel</span></div><div class="flap-empty">Plus aucun train affiché pour l'instant à cette gare.</div></div>`;
+      return;
+    }
+
+    // Regroupement par direction (destination finale), comme sur le tableau d'accueil
+    const byDirection = new Map();
+    for(const j of trains){
+      const key = j.to || '?';
+      if(!byDirection.has(key)) byDirection.set(key, []);
+      if(byDirection.get(key).length < 4) byDirection.get(key).push(j);
+    }
+    const directions = [...byDirection.keys()];
+
+    const bodyHtml = directions.map((dest, dirIdx) => {
+      const isGrey = dirIdx % 2 === 1;
+      const rows = byDirection.get(dest).map(j => {
+        const delay = computeDelayMin(j.stop);
+        const timeCls = delay > 0 ? 'flap-time delay' : 'flap-time';
+        const badge = delay > 0 ? `<span class="flap-badge badge-delay">+${delay} min</span>` : `<span class="flap-badge badge-ontime">à l'heure</span>`;
+        const t = fmtTime(j.stop.departure);
+        const lineNum = j.number || j.category || '';
+        const platform = j.stop.platform ? 'quai ' + j.stop.platform : '';
+        const searchQuery = encodeURIComponent(`SBB CFF FFS ${j.category || ''} ${j.number || ''} horaire arrêts ${name}`);
+        const searchUrl = `https://www.google.com/search?q=${searchQuery}`;
+
+        const r = getReachability(coordinate, j.stop.departure);
+        const reachNote = reachabilityNoteHtml(r);
+        const destStyle = r?.status === 'unreachable' ? 'color:var(--amber); font-weight:700;' : (r?.status === 'urgent' ? 'color:var(--coral); font-weight:700;' : '');
+
+        return `<div class="flap-row">
+          <span class="${timeCls}">${t}</span>
+          <div class="flap-mode mode-train">🚆</div>
+          <span class="flap-line">${lineNum}</span>
+          <a href="${searchUrl}" target="_blank" class="flap-dest" style="text-decoration:underline; text-underline-offset:2px; ${destStyle}">${j.to || ''} ↗</a>
+          ${badge}
+        </div>${platform ? `<div class="quai-info" style="padding:0 0 6px 91px; font-size:10.5px; font-family:'IBM Plex Mono',monospace;">${platform}</div>` : ''}${reachNote}`;
+      }).join('');
+      return `<div class="flap-direction-block${isGrey ? ' flap-direction-grey' : ''}"><div class="flap-direction-label">→ ${dest}</div>${rows}</div>`;
+    }).join('');
+
+    slot.innerHTML = `<div class="flapboard"><div class="flap-header"><span>${name}${distTxt}</span><span>Temps réel</span></div>${bodyHtml}</div>`;
+  } catch(e){
+    slot.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Impossible de charger ${name} : ${e.message || e}</div>`;
+  }
+}
+
+// ---------- Écran "Autour" : restaurants réels (Google Places) + agenda officiel ----------
+// ---------- Écran "Magasin" : commerces réels autour de la position actuelle (pas d'une destination) ----------
+async function loadShopScreen(){
+  const content = document.getElementById('shop-content');
+  content.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Localisation en cours…</div>';
+
+  const freshCoords = await getFreshPosition();
+  if(!freshCoords){
+    content.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Localisation impossible — vérifiez que vous avez autorisé la position pour ce site.</div>';
+    return;
+  }
+  userCoords = freshCoords;
+  const lat = freshCoords.lat, lon = freshCoords.lon;
+
+  content.innerHTML = `
+    <p class="meta-txt" style="margin:0 20px 10px; font-family:'IBM Plex Mono',monospace;">
+      📍 Recherche autour de ${lat.toFixed(5)}, ${lon.toFixed(5)} —
+      <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" style="color:var(--lake);">vérifier sur Maps ↗</a>
+    </p>
+    <p class="value-note" style="margin:10px 20px 12px;">Commerces dans un rayon de 500 m autour de votre position réelle, triés par distance.</p>
+    <div id="shop-list"><div class="flap-loading" style="padding:0 20px;">Recherche des commerces à proximité…</div></div>
+  `;
+
+  const list = document.getElementById('shop-list');
+  try{
+    const res = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.rating,places.userRatingCount,places.currentOpeningHours.openNow,places.location'
+      },
+      body: JSON.stringify({
+        includedTypes: ['supermarket', 'grocery_store', 'convenience_store'],
+        maxResultCount: 16,
+        rankPreference: 'DISTANCE',
+        locationRestriction: { circle: { center: { latitude: lat, longitude: lon }, radius: 500.0 } }
+      })
+    });
+    const data = await res.json();
+    if(data.error){
+      list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur Google Places : ${data.error.message || 'raison inconnue'} (code ${data.error.status || res.status}).</div>`;
+      return;
+    }
+    const shops = (data.places || []).map(p => {
+      const dist = Math.round(haversineMeters(lat, lon, p.location.latitude, p.location.longitude));
+      return {
+        id: p.id,
+        name: p.displayName ? p.displayName.text : 'Commerce',
+        rating: p.rating || null,
+        ratingCount: p.userRatingCount || 0,
+        openNow: p.currentOpeningHours ? p.currentOpeningHours.openNow : null,
+        distance: dist
+      };
+    }).sort((a,b) => a.distance - b.distance);
+
+    bumpUsage('usage_places_calls');
+
+    if(shops.length === 0){
+      list.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Aucun commerce trouvé dans un rayon de 500 m.</div>';
+      return;
+    }
+
+    list.innerHTML = shops.map(s => {
+      const openTxt = s.openNow === true ? '<span class="status-open">● Ouvert</span>' : (s.openNow === false ? '<span class="status-closed">● Fermé</span>' : '<span class="meta-txt">Horaires inconnus</span>');
+      return `<div class="place-card" onclick="openPlaceDetail('${s.id}')" style="cursor:pointer;">
+        <div class="place-thumb" style="background:var(--leaf-dim);">🛒</div>
+        <div class="place-info">
+          <div class="place-name">${s.name}</div>
+          <div class="place-meta">
+            ${s.rating ? `<span class="rating">★ ${s.rating}</span><span class="dot-sep"></span><span class="meta-txt">${s.ratingCount} avis</span>` : '<span class="meta-txt">Pas encore noté</span>'}
+          </div>
+          <div class="place-meta" style="margin-top:5px;">${openTxt}</div>
+          <div class="meta-txt" style="margin-top:3px;">${s.distance} m · toucher pour en savoir plus</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e){
+    list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Impossible de charger les commerces : ${e.message || e}.</div>`;
+  }
+}
+
+const PRICE_LEVEL_MAP = {
+  PRICE_LEVEL_FREE: 1, PRICE_LEVEL_INEXPENSIVE: 1, PRICE_LEVEL_MODERATE: 2,
+  PRICE_LEVEL_EXPENSIVE: 3, PRICE_LEVEL_VERY_EXPENSIVE: 4
+};
+
+const CUISINE_TYPES = [
+  { key: 'all', label: '🍽️ Tous', type: 'restaurant' },
+  { key: 'italian', label: '🍝 Italien', type: 'italian_restaurant' },
+  { key: 'japanese', label: '🍣 Japonais', type: 'japanese_restaurant' },
+  { key: 'burger', label: '🍔 Burger', type: 'hamburger_restaurant' },
+  { key: 'pizza', label: '🍕 Pizza', type: 'pizza_restaurant' },
+  { key: 'chinese', label: '🥡 Chinois', type: 'chinese_restaurant' },
+  { key: 'indian', label: '🍛 Indien', type: 'indian_restaurant' },
+  { key: 'beef', label: '🥩 Beef', type: 'steak_house' }
+];
+
+let aroundMode = 'destination'; // 'destination' ou 'position'
+
+async function loadAroundScreen(mode){
+  if(mode) aroundMode = mode;
+  const content = document.getElementById('around-content');
+
+  content.innerHTML = `
+    <div class="sort-row" id="around-mode-row">
+      <div class="chip ${aroundMode === 'destination' ? 'active' : ''}" data-mode="destination">🎯 Destination du trajet</div>
+      <div class="chip ${aroundMode === 'position' ? 'active' : ''}" data-mode="position">📍 Ma position actuelle</div>
+    </div>
+    <div id="around-body"></div>
+  `;
+
+  document.querySelectorAll('#around-mode-row .chip').forEach(chip => {
+    chip.addEventListener('click', () => loadAroundScreen(chip.dataset.mode));
+  });
+
+  const body = document.getElementById('around-body');
+
+  let lat, lon, label;
+  if(aroundMode === 'position'){
+    body.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Localisation en cours…</div>';
+    const fresh = await getFreshPosition();
+    if(!fresh){
+      body.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Localisation impossible — vérifiez que vous avez autorisé la position pour ce site.</div>';
+      return;
+    }
+    userCoords = fresh;
+    lat = fresh.lat; lon = fresh.lon; label = 'votre position actuelle';
+    document.getElementById('around-eyebrow').textContent = 'Restos autour de';
+    document.getElementById('around-title').textContent = 'Ma position actuelle';
+  } else {
+    if(!lastAroundCoord){
+      body.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Recherchez d\'abord un trajet — les restaurants autour de votre destination s\'afficheront ici automatiquement.</div>';
+      document.getElementById('around-eyebrow').textContent = '—';
+      document.getElementById('around-title').textContent = 'Aucune destination récente';
+      return;
+    }
+    lat = lastAroundCoord.x; lon = lastAroundCoord.y; label = lastAroundLabel;
+    document.getElementById('around-eyebrow').textContent = 'Restos autour de';
+    document.getElementById('around-title').textContent = lastAroundLabel;
+  }
+
+  const agendaQuery = encodeURIComponent("agenda événements aujourd'hui " + label);
+
+  body.innerHTML = `
+    <p class="meta-txt" style="margin:10px 20px 10px; font-family:'IBM Plex Mono',monospace;">
+      📍 Recherche autour de ${lat.toFixed(5)}, ${lon.toFixed(5)} —
+      <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" style="color:var(--lake);">vérifier sur Maps ↗</a>
+    </p>
+    <div class="agenda-card">
+      <div class="agenda-title">🔴 Ce qui se passe ici aujourd'hui</div>
+      <div class="agenda-sub">Il n'existe pas de flux fiable et à jour pour les événements locaux en Suisse — plutôt que d'afficher une date qu'on ne peut pas garantir, voici un accès direct vers l'agenda le plus pertinent pour ce lieu.</div>
+      <a class="agenda-link" href="https://www.google.com/search?q=${agendaQuery}" target="_blank">Voir l'agenda ↗</a>
+    </div>
+
+    <div class="sort-row" id="cuisine-row">
+      ${CUISINE_TYPES.map((c, i) => `<div class="chip ${i === 0 ? 'active' : ''}" data-cuisine="${c.type}">${c.label}</div>`).join('')}
+      <div style="flex-shrink:0; width:12px;"></div>
+    </div>
+
+    <div class="sort-row">
+      <div class="chip active" data-sort="value">⭐ Qualité-prix</div>
+      <div class="chip" data-sort="rating">🏅 Mieux noté</div>
+      <div class="chip" data-sort="distance">📍 Plus proche</div>
+    </div>
+    <p class="value-note">Rapport qualité-prix estimé à partir de la note Google et du niveau de prix — pas un classement officiel (pas de données Michelin/GaultMillau intégrées pour l'instant).</p>
+    <div id="around-places-list"><div class="flap-loading" style="padding:0 20px;">Recherche des restaurants à proximité…</div></div>
+  `;
+
+  document.querySelectorAll('#cuisine-row .chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('#cuisine-row .chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      searchRestaurants(lat, lon, chip.dataset.cuisine);
+    });
+  });
+
+  document.querySelectorAll('.sort-row .chip[data-sort]').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.sort-row .chip[data-sort]').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      renderAroundPlaces(chip.dataset.sort);
+    });
+  });
+
+  searchRestaurants(lat, lon, 'restaurant');
+}
+
+async function searchRestaurants(lat, lon, cuisineType){
+  const list = document.getElementById('around-places-list');
+  list.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Recherche des restaurants à proximité…</div>';
+  try{
+    const res = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.rating,places.userRatingCount,places.priceLevel,places.currentOpeningHours.openNow,places.location'
+      },
+      body: JSON.stringify({
+        includedTypes: [cuisineType],
+        maxResultCount: 14,
+        locationRestriction: { circle: { center: { latitude: lat, longitude: lon }, radius: 500.0 } }
+      })
+    });
+    const data = await res.json();
+    if(data.error){
+      list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur Google Places : ${data.error.message || 'raison inconnue'} (code ${data.error.status || res.status}).</div>`;
+      return;
+    }
+    aroundPlaces = (data.places || []).map(p => {
+      const dist = haversineMeters(lat, lon, p.location.latitude, p.location.longitude);
+      const priceLvl = PRICE_LEVEL_MAP[p.priceLevel] || 2;
+      const hasEnoughReviews = (p.userRatingCount || 0) >= 5;
+      return {
+        id: p.id,
+        name: p.displayName ? p.displayName.text : 'Restaurant',
+        rating: p.rating || null,
+        ratingCount: p.userRatingCount || 0,
+        priceLvl,
+        openNow: p.currentOpeningHours ? p.currentOpeningHours.openNow : null,
+        distance: Math.round(dist),
+        valueScore: (p.rating && hasEnoughReviews) ? p.rating / priceLvl : -1
+      };
+    });
+    bumpUsage('usage_places_calls');
+
+    if(aroundPlaces.length === 0){
+      list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Aucun résultat pour cette catégorie dans un rayon de 500 m — essayez "Tous" ou élargissez votre recherche.</div>`;
+      return;
+    }
+    const activeSort = document.querySelector('.sort-row .chip[data-sort].active')?.dataset.sort || 'value';
+    renderAroundPlaces(activeSort);
+  } catch(e){
+    list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Impossible de charger les restaurants : ${e.message || e}.</div>`;
+  }
+}
+
+const PRICE_LABELS = {
+  1: 'CHF · Abordable',
+  2: 'CHF CHF · Modéré',
+  3: 'CHF CHF CHF · Cher',
+  4: 'CHF CHF CHF CHF · Très cher'
+};
+
+// ---------- Section "À voir" : sites touristiques réels (OpenTripMap) ----------
+let visitMode = 'destination'; // 'destination' ou 'position'
+
+async function loadVisitScreen(mode){
+  if(mode) visitMode = mode;
+  const content = document.getElementById('visit-content');
+
+  content.innerHTML = `
+    <div class="sort-row" id="visit-mode-row">
+      <div class="chip ${visitMode === 'destination' ? 'active' : ''}" data-mode="destination">🎯 Destination du trajet</div>
+      <div class="chip ${visitMode === 'position' ? 'active' : ''}" data-mode="position">📍 Ma position actuelle</div>
+    </div>
+    <div id="visit-body"></div>
+  `;
+
+  document.querySelectorAll('#visit-mode-row .chip').forEach(chip => {
+    chip.addEventListener('click', () => loadVisitScreen(chip.dataset.mode));
+  });
+
+  const body = document.getElementById('visit-body');
+
+  let lat, lon;
+  if(visitMode === 'position'){
+    body.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Localisation en cours…</div>';
+    const fresh = await getFreshPosition();
+    if(!fresh){
+      body.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Localisation impossible — vérifiez que vous avez autorisé la position pour ce site.</div>';
+      return;
+    }
+    userCoords = fresh;
+    lat = fresh.lat; lon = fresh.lon;
+    document.getElementById('visit-eyebrow').textContent = 'À voir autour de';
+    document.getElementById('visit-title').textContent = 'Ma position actuelle';
+  } else {
+    if(!lastAroundCoord){
+      body.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Recherchez d\'abord un trajet — les sites autour de votre destination s\'afficheront ici automatiquement.</div>';
+      document.getElementById('visit-eyebrow').textContent = '—';
+      document.getElementById('visit-title').textContent = 'Aucune destination récente';
+      return;
+    }
+    lat = lastAroundCoord.x; lon = lastAroundCoord.y;
+    document.getElementById('visit-eyebrow').textContent = 'À voir autour de';
+    document.getElementById('visit-title').textContent = lastAroundLabel;
+  }
+
+  body.innerHTML = `
+    <p class="meta-txt" style="margin:10px 20px 10px; font-family:'IBM Plex Mono',monospace;">
+      📍 Recherche autour de ${lat.toFixed(5)}, ${lon.toFixed(5)} —
+      <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" style="color:var(--lake);">vérifier sur Maps ↗</a>
+    </p>
+    <p class="value-note" style="margin-top:10px;">Sites et lieux référencés sur Wikipedia à proximité, triés par distance.</p>
+    <div id="around-attractions-list"><div class="flap-loading" style="padding:0 20px;">Recherche des sites à proximité…</div></div>
+
+    <p class="section-label" style="margin-top:24px;">🎫 Événements dans les attractions officielles (2 km)</p>
+    <p class="value-note">Source : Suisse Tourisme — couvre uniquement les événements liés à des attractions officiellement référencées (musées, sites), pas les concerts ou manifestations indépendantes.</p>
+    <div id="official-events-list"><div class="flap-loading" style="padding:0 20px;">Recherche des événements officiels…</div></div>
+  `;
+  loadAttractions(lat, lon);
+  loadOfficialEvents(lat, lon);
+}
+
+async function loadOfficialEvents(lat, lon){
+  const list = document.getElementById('official-events-list');
+  try{
+    const res = await fetch(`https://opendata.myswitzerland.io/v1/attractions/?geo.dist=${lat},${lon},2000&hitsPerPage=50&expand=true&lang=fr`, {
+      headers: { 'x-api-key': MYSWITZERLAND_API_KEY }
+    });
+    if(!res.ok){
+      const errBody = await res.text();
+      list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur Suisse Tourisme : HTTP ${res.status} — ${errBody.slice(0,200)}</div>`;
+      return;
+    }
+    const data = await res.json();
+    const withEvents = (data.data || []).filter(a => a.event);
+    if(withEvents.length === 0){
+      list.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Aucun événement officiel en ce moment dans ce rayon.</div>';
+      return;
+    }
+    list.innerHTML = withEvents.map(a => `
+      <div class="place-card">
+        <div class="place-thumb" style="background:var(--coral-dim);">🎫</div>
+        <div class="place-info">
+          <div class="place-name">${a.name}</div>
+          <div class="meta-txt" style="margin-top:3px;">${a.event.location || ''}</div>
+          ${a.url ? `<a href="${a.url}" target="_blank" style="font-size:11.5px; color:var(--lake);">Voir la fiche officielle ↗</a>` : ''}
+        </div>
+      </div>
+    `).join('');
+  } catch(e){
+    list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Impossible de charger les événements officiels : ${e.message || e}</div>`;
+  }
+}
+
+let aroundAttractions = []; // cache local {pageid, title, dist, extract, thumbnail, lat, lon}
+
+async function loadAttractions(lat, lon){
+  const list = document.getElementById('around-attractions-list');
+  try{
+    // Étape 1 : sites Wikipedia à proximité, avec distance (API MediaWiki, gratuite, sans clé)
+    const geoRes = await fetch(`https://fr.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}|${lon}&gsradius=800&gslimit=15&format=json&origin=*`);
+    const geoData = await geoRes.json();
+    const results = geoData.query?.geosearch || [];
+    if(results.length === 0){
+      list.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Aucun site notable trouvé dans un rayon de 800 m sur Wikipedia.</div>';
+      return;
+    }
+
+    // Étape 2 : résumé + photo pour ces pages, en un seul appel groupé
+    const ids = results.map(r => r.pageid).join('|');
+    const detailRes = await fetch(`https://fr.wikipedia.org/w/api.php?action=query&pageids=${ids}&prop=extracts|pageimages&exintro=1&explaintext=1&exchars=400&piprop=thumbnail&pithumbsize=400&format=json&origin=*`);
+    const detailData = await detailRes.json();
+    const pages = detailData.query?.pages || {};
+
+    aroundAttractions = results.map(r => {
+      const d = pages[r.pageid] || {};
+      return {
+        pageid: r.pageid,
+        title: r.title,
+        dist: Math.round(r.dist || 0),
+        lat: r.lat, lon: r.lon,
+        extract: d.extract || '',
+        thumbnail: d.thumbnail?.source || null
+      };
+    });
+
+    list.innerHTML = aroundAttractions.map(p => `
+      <div class="place-card" onclick="openAttractionDetail(${p.pageid})" style="cursor:pointer;">
+        <div class="place-thumb" style="background:var(--lake-dim); ${p.thumbnail ? `background-image:url('${p.thumbnail}'); background-size:cover; background-position:center;` : ''}">${p.thumbnail ? '' : '🏛️'}</div>
+        <div class="place-info">
+          <div class="place-name">${p.title}</div>
+          <div class="meta-txt" style="margin-top:3px;">${p.dist} m · toucher pour en savoir plus</div>
+        </div>
+      </div>
+    `).join('');
+  } catch(e){
+    list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Impossible de charger les sites : ${e.message || e}</div>`;
+  }
+}
+
+function openAttractionDetail(pageid){
+  const modal = document.getElementById('place-detail-modal');
+  const body = document.getElementById('place-detail-body');
+  const p = aroundAttractions.find(a => a.pageid === pageid);
+  modal.classList.add('show');
+
+  if(!p){
+    body.innerHTML = '<div class="flap-empty" style="padding:20px;">Fiche introuvable.</div>';
+    return;
+  }
+
+  const imgHtml = p.thumbnail ? `<img src="${p.thumbnail}" style="width:100%; border-radius:12px; margin-bottom:12px;">` : '';
+  const wikiUrl = `https://fr.wikipedia.org/wiki/${encodeURIComponent(p.title.replace(/ /g, '_'))}`;
+  body.innerHTML = `
+    ${imgHtml}
+    <h2 class="app-title" style="font-size:19px; margin-bottom:8px;">${p.title}</h2>
+    <p class="meta-txt" style="line-height:1.5;">${p.extract || "Pas de description disponible pour ce lieu."}</p>
+    <div style="display:flex; gap:8px; margin-top:16px;">
+      <a href="https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=${p.lat},${p.lon}" target="_blank" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">🗺️ Itinéraire à pied</a>
+      <a href="${wikiUrl}" target="_blank" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">📖 Wikipedia</a>
+    </div>
+    <p class="meta-txt" style="margin-top:14px; line-height:1.4;">ⓘ Source : Wikipedia (contenu ouvert, licence Creative Commons) — pas un guide éditorialisé, informations parfois incomplètes selon les contributions.</p>
+  `;
+}
+
+function renderAroundPlaces(sortBy){
+  const list = document.getElementById('around-places-list');
+  let sorted = [...aroundPlaces];
+  if(sortBy === 'value') sorted.sort((a,b) => b.valueScore - a.valueScore);
+  else if(sortBy === 'rating') sorted.sort((a,b) => (b.rating||0) - (a.rating||0));
+  else if(sortBy === 'distance') sorted.sort((a,b) => a.distance - b.distance);
+
+  const topValueName = (sortBy === 'value' && sorted[0] && sorted[0].valueScore > 0) ? sorted[0].name : null;
+
+  list.innerHTML = sorted.map((p, i) => {
+    const priceTxt = PRICE_LABELS[p.priceLvl] || 'Prix non communiqué';
+    const openTxt = p.openNow === true ? '<span class="status-open">● Ouvert</span>' : (p.openNow === false ? '<span class="status-closed">● Fermé</span>' : '<span class="meta-txt">Horaires inconnus</span>');
+    const isTop = p.name === topValueName;
+    return `<div class="place-card ${isTop ? 'top-value' : ''}" onclick="openPlaceDetail('${p.id}')" style="cursor:pointer;">
+      <div class="place-thumb">🍽️</div>
+      <div class="place-info">
+        <div class="place-name">${p.name}</div>
+        <div class="place-meta">
+          ${p.rating ? `<span class="rating">★ ${p.rating}</span><span class="dot-sep"></span><span class="meta-txt">${p.ratingCount} avis</span><span class="dot-sep"></span>` : '<span class="meta-txt">Pas encore noté</span>'}
+        </div>
+        <div class="meta-txt" style="margin-top:3px; font-weight:600;">${priceTxt}</div>
+        ${isTop ? '<div class="value-badge">🏆 Meilleur rapport qualité-prix</div>' : ''}
+        <div class="place-meta" style="margin-top:5px;">${openTxt}</div>
+        <div class="meta-txt" style="margin-top:3px;">${p.distance} m · toucher pour en savoir plus</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ---------- Fiche détaillée d'un restaurant ----------
+async function openPlaceDetail(placeId){
+  const modal = document.getElementById('place-detail-modal');
+  const body = document.getElementById('place-detail-body');
+  modal.classList.add('show');
+  body.innerHTML = '<div class="flap-loading" style="padding:20px;">Chargement de la fiche…</div>';
+
+  try{
+    const res = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
+      headers: {
+        'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+        'X-Goog-FieldMask': 'displayName,rating,userRatingCount,priceLevel,formattedAddress,nationalPhoneNumber,websiteUri,googleMapsUri,regularOpeningHours.weekdayDescriptions,currentOpeningHours.openNow'
+      }
+    });
+    const p = await res.json();
+    bumpUsage('usage_places_calls');
+    if(p.error){
+      body.innerHTML = `<div class="flap-empty" style="padding:20px;">Erreur : ${p.error.message || 'raison inconnue'}</div>`;
+      return;
+    }
+    const priceTxt = PRICE_LABELS[PRICE_LEVEL_MAP[p.priceLevel]] || 'Prix non communiqué';
+    const openTxt = p.currentOpeningHours ? (p.currentOpeningHours.openNow ? '<span class="status-open">● Ouvert maintenant</span>' : '<span class="status-closed">● Fermé maintenant</span>') : '';
+    const hoursHtml = (p.regularOpeningHours?.weekdayDescriptions || []).map(d => `<div class="meta-txt">${d}</div>`).join('');
+
+    body.innerHTML = `
+      <h2 class="app-title" style="font-size:19px; margin-bottom:6px;">${p.displayName ? p.displayName.text : 'Restaurant'}</h2>
+      <div class="place-meta" style="margin-bottom:4px;">
+        ${p.rating ? `<span class="rating">★ ${p.rating}</span><span class="dot-sep"></span><span class="meta-txt">${p.userRatingCount || 0} avis</span>` : '<span class="meta-txt">Pas encore noté</span>'}
+      </div>
+      <div class="meta-txt" style="font-weight:600; margin-bottom:4px;">${priceTxt}</div>
+      <div style="margin-bottom:10px;">${openTxt}</div>
+      ${p.formattedAddress ? `<div class="meta-txt" style="margin-bottom:6px;">📍 ${p.formattedAddress}</div>` : ''}
+      ${p.nationalPhoneNumber ? `<div class="meta-txt" style="margin-bottom:6px;">📞 ${p.nationalPhoneNumber}</div>` : ''}
+      ${hoursHtml ? `<div class="section-label" style="margin:14px 0 6px;">Horaires</div>${hoursHtml}` : ''}
+      <button class="btn-primary" id="save-contact-btn" style="margin-top:16px;">💾 Enregistrer dans les contacts</button>
+      <div style="display:flex; gap:8px; margin-top:10px;">
+        ${p.websiteUri ? `<a href="${p.websiteUri}" target="_blank" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">🌐 Site / Menu</a>` : ''}
+        ${p.googleMapsUri ? `<a href="${p.googleMapsUri}" target="_blank" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">📍 Fiche Google</a>` : ''}
+      </div>
+      <p class="meta-txt" style="margin-top:14px; line-height:1.4;">ⓘ Le menu détaillé n'est pas fourni par l'API Google — le lien "Fiche Google" affiche souvent les photos de menu ajoutées par l'établissement ou les visiteurs.</p>
+    `;
+    document.getElementById('save-contact-btn').onclick = () => saveContactFromPlace(p);
+  } catch(e){
+    body.innerHTML = `<div class="flap-empty" style="padding:20px;">Impossible de charger la fiche : ${e.message || e}</div>`;
+  }
+}
+
+function closePlaceDetail(){
+  document.getElementById('place-detail-modal').classList.remove('show');
+}
+
+// ---------- Export vers Contacts (vCard) et Calendrier (iCalendar) ----------
+function icsDate(dateStr){
+  const d = new Date(dateStr);
+  return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+}
+
+function downloadBlob(content, mimeType, filename){
+  const blob = new Blob([content], { type: mimeType + ';charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+// Génère et propose une fiche contact (.vcf) pour le restaurant actuellement affiché
+function saveContactFromPlace(p){
+  const lines = [
+    'BEGIN:VCARD',
+    'VERSION:3.0',
+    `FN:${p.displayName ? p.displayName.text : 'Restaurant'}`,
+    p.formattedAddress ? `ADR;TYPE=WORK:;;${p.formattedAddress.replace(/,/g, '\\,')};;;;` : '',
+    p.nationalPhoneNumber ? `TEL;TYPE=WORK,VOICE:${p.nationalPhoneNumber}` : '',
+    p.websiteUri ? `URL:${p.websiteUri}` : '',
+    'END:VCARD'
+  ].filter(Boolean);
+  downloadBlob(lines.join('\r\n'), 'text/vcard', (p.displayName ? p.displayName.text : 'restaurant') + '.vcf');
+}
+
+// Génère un événement par étape du trajet, chacun avec une alarme 5 min avant l'arrivée à cette étape
+function saveTripToCalendar(c){
+  const journeySections = (c.sections || []).filter(sec => sec.journey);
+  if(journeySections.length === 0){ showToast("Aucune étape à exporter pour ce trajet."); return; }
+
+  let events = '';
+  journeySections.forEach((sec, i) => {
+    const isLast = i === journeySections.length - 1;
+    const alightLabel = isLast ? 'Terminus' : `Descendre à ${sec.arrival.station.name}`;
+    const summary = `${sec.journey.category}${sec.journey.number ? ' ' + sec.journey.number : ''} → ${alightLabel}`;
+    events += [
+      'BEGIN:VEVENT',
+      `UID:${Date.now()}-${i}@itineraire-ch.github.io`,
+      `DTSTAMP:${icsDate(new Date().toISOString())}`,
+      `DTSTART:${icsDate(sec.departure.departure)}`,
+      `DTEND:${icsDate(sec.arrival.arrival)}`,
+      `SUMMARY:${summary}`,
+      `DESCRIPTION:Direction ${sec.journey.to || ''}`,
+      'BEGIN:VALARM',
+      'TRIGGER:-PT5M',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:${alightLabel} dans 5 minutes`,
+      'END:VALARM',
+      'END:VEVENT',
+      ''
+    ].join('\r\n');
+  });
+
+  // Étape finale à pied jusqu'à l'adresse exacte, si elle a été résolue (avec sa propre alarme)
+  if(selectedPlaceWalk){
+    const lastArrival = journeySections[journeySections.length - 1].arrival.arrival;
+    const walkMin = walkMinutes(selectedPlaceWalk.stops[0].distance);
+    const walkEnd = new Date(new Date(lastArrival).getTime() + walkMin * 60000).toISOString();
+    events += [
+      'BEGIN:VEVENT',
+      `UID:${Date.now()}-final@itineraire-ch.github.io`,
+      `DTSTAMP:${icsDate(new Date().toISOString())}`,
+      `DTSTART:${icsDate(lastArrival)}`,
+      `DTEND:${icsDate(walkEnd)}`,
+      `SUMMARY:🚶 Marche jusqu'à ${selectedPlaceWalk.placeName}`,
+      'BEGIN:VALARM',
+      'TRIGGER:-PT5M',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:Arrivée à ${selectedPlaceWalk.placeName} dans 5 minutes`,
+      'END:VALARM',
+      'END:VEVENT',
+      ''
+    ].join('\r\n');
+  }
+
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//itineraire-ch//FR', 'CALSCALE:GREGORIAN', events, 'END:VCALENDAR'].join('\r\n');
+  downloadBlob(ics, 'text/calendar', 'trajet.ics');
+  showToast(`${journeySections.length + (selectedPlaceWalk ? 1 : 0)} étape(s) ajoutée(s), chacune avec une alarme 5 min avant.`, 4500);
+}
+
+function showTripDetail(idx){
+  const c = currentConnections[idx];
+  showScreen('detail');
+  document.getElementById('detail-arrival').textContent = 'Arrivée ' + fmtTime(c.to.arrival);
+  const durParts = c.duration.match(/(\d+)d(\d+):(\d+)/);
+  let durTxt = '';
+  if(durParts){
+    const totalMin = parseInt(durParts[1])*24*60 + parseInt(durParts[2])*60 + parseInt(durParts[3]);
+    durTxt = totalMin >= 60 ? Math.floor(totalMin/60) + ' h ' + (totalMin%60) + ' min' : totalMin + ' min';
+  }
+  document.getElementById('detail-duration').textContent = durTxt;
+
+  const steps = [];
+  if(lastFromDistanceMeters){
+    steps.push(`<div class="step">
+      <div class="step-dot" style="background:var(--ink);">◎</div>
+      <div><div class="step-title">Votre position</div>
+      <div class="step-sub">Marchez jusqu'à ${lastFromLabel} (estimation à vol d'oiseau)</div>
+      <div class="step-time">${walkMinutes(lastFromDistanceMeters)} min à pied · ≈ ${Math.round(lastFromDistanceMeters)} m</div></div>
+    </div>`);
+  } else if(lastFromLabel){
+    steps.push(`<div class="step">
+      <div class="step-dot" style="background:var(--ink);">◎</div>
+      <div><div class="step-title">${lastFromLabel}</div>
+      <div class="step-sub">Point de départ choisi</div></div>
+    </div>`);
+  }
+
+  const journeySections = (c.sections || []).filter(sec => sec.journey);
+  const transferWalks = []; // {walkStepId, fromName, toName} — une par frontière entre deux lignes, résolue après coup
+  journeySections.forEach((sec, i) => {
+    const mode = iconForCategory(sec.journey.category);
+    const depDelay = computeDelayMin(sec.departure);
+    const platform = sec.departure.platform ? 'quai ' + sec.departure.platform : '';
+    steps.push(`<div class="step">
+      <div class="step-dot ${mode.cls}">${mode.icon}</div>
+      <div><div class="step-title">Montez : ${sec.journey.category}${sec.journey.number ? ' '+sec.journey.number : ''} — direction ${sec.journey.to || ''}</div>
+      <div class="step-sub">${platform}${depDelay>0 ? ' · retard signalé +'+depDelay+' min' : ''}</div>
+      <div class="step-time">Départ ${fmtTime(sec.departure.departure)}</div></div>
+    </div>`);
+
+    const isLast = i === journeySections.length - 1;
+    const arrDelay = computeDelayMin(sec.arrival);
+    const nextSec = !isLast ? journeySections[i+1] : null;
+
+    steps.push(`<div class="step">
+      <div class="step-dot" style="background:var(--amber);">⬇︎</div>
+      <div><div class="step-title">${isLast ? 'Descendez ici — terminus de ce trajet' : 'Descendez à ' + sec.arrival.station.name}</div>
+      <div class="step-sub" id="${isLast ? '' : 'alight-sub-'+i}">${arrDelay>0 ? 'Retard signalé +'+arrDelay+' min à l\'arrivée' : 'Arrivée à l\'heure prévue'}</div>
+      <div class="step-time">${fmtTime(sec.arrival.arrival)}</div></div>
+    </div>`);
+
+    // On ne présélectionne plus rien ici : chaque frontière entre deux lignes est vérifiée
+    // après coup avec la vraie distance, plutôt que de se fier à un identifiant d'arrêt.
+    if(!isLast){
+      const walkStepId = 'walk-step-' + i;
+      steps.push(`<div class="step" id="${walkStepId}">
+        <div class="step-dot" style="background:var(--ink-soft);">🚶</div>
+        <div><div class="step-title" id="${walkStepId}-title">Correspondance vers ${nextSec.departure.station.name}</div>
+        <div class="step-sub" id="${walkStepId}-sub">Calcul du passage…</div>
+        <button class="transfer-map-btn" id="${walkStepId}-btn" style="display:none;">🗺️ Voir ce passage</button></div>
+      </div>`);
+      transferWalks.push({ walkStepId, fromName: sec.arrival.station.name, toName: nextSec.departure.station.name });
+    }
+  });
+
+  if(selectedPlaceWalk){
+    const mainStop = selectedPlaceWalk.stops[0];
+    const otherStops = selectedPlaceWalk.stops.slice(1).map(s => s.name + ' (' + s.distance + ' m)').join(', ');
+    steps.push(`<div class="step">
+      <div class="step-dot" style="background:var(--coral); color:#fff;">🍽️</div>
+      <div><div class="step-title">${selectedPlaceWalk.placeName}</div>
+      <div class="step-sub">${walkMinutes(mainStop.distance)} min à pied depuis ${mainStop.name} (≈ ${mainStop.distance} m, estimation à vol d'oiseau)${otherStops ? ' · Autre arrêt proche : ' + otherStops : ''}</div></div>
+    </div>`);
+  }
+
+  document.getElementById('detail-steps').innerHTML = steps.join('');
+
+  // Résolution après coup : on calcule la vraie distance entre les deux arrêts de chaque frontière.
+  // En dessous de 25 m, on considère que c'est le même point physique (pas de marche à afficher).
+  const SAME_STOP_THRESHOLD_M = 25;
+  transferWalks.forEach(async (tw) => {
+    const titleEl = document.getElementById(tw.walkStepId + '-title');
+    const subEl = document.getElementById(tw.walkStepId + '-sub');
+    const btnEl = document.getElementById(tw.walkStepId + '-btn');
+    const stepEl = document.getElementById(tw.walkStepId);
+    try{
+      const [fromRes, toRes] = await Promise.all([
+        fetch(`${API}/locations?query=${encodeURIComponent(tw.fromName)}`).then(r => r.json()),
+        fetch(`${API}/locations?query=${encodeURIComponent(tw.toName)}`).then(r => r.json())
+      ]);
+      const fromCoord = fromRes.stations?.[0]?.coordinate;
+      const toCoord = toRes.stations?.[0]?.coordinate;
+      if(fromCoord && toCoord){
+        const walkDist = Math.round(haversineMeters(fromCoord.x, fromCoord.y, toCoord.x, toCoord.y));
+        if(walkDist <= SAME_STOP_THRESHOLD_M){
+          if(stepEl){ stepEl.querySelector('.step-dot').textContent = '↔︎'; }
+          if(titleEl) titleEl.textContent = 'Correspondance sur le même arrêt';
+          if(subEl) subEl.textContent = 'Pas de marche significative signalée entre ces deux lignes.';
+        } else {
+          if(subEl) subEl.textContent = `≈ ${walkMinutes(walkDist)} min de marche (≈ ${walkDist} m, estimation à vol d'oiseau)`;
+          if(btnEl){
+            btnEl.style.display = '';
+            btnEl.textContent = `🗺️ Voir ce passage (${tw.fromName} → ${tw.toName})`;
+            btnEl.addEventListener('click', () => {
+              const url = `https://www.google.com/maps/dir/?api=1&travelmode=walking&origin=${fromCoord.x},${fromCoord.y}&destination=${toCoord.x},${toCoord.y}`;
+              window.open(url, '_blank');
+            });
+          }
+        }
+      } else {
+        if(subEl) subEl.textContent = 'Rejoignez le prochain arrêt à pied (carte indisponible pour ce passage).';
+      }
+    } catch(e){
+      if(subEl) subEl.textContent = 'Rejoignez le prochain arrêt à pied (carte indisponible pour ce passage).';
+    }
+  });
+
+  // La carte en direct montre le prochain arrêt à rejoindre à pied (l'étape immédiate),
+  // pas la destination finale — c'est ce qui compte pendant que tu marches.
+  if(lastFromCoordinate && lastFromCoordinate.x && lastFromCoordinate.y){
+    renderLiveMap(lastFromCoordinate.x, lastFromCoordinate.y, lastFromLabel);
+  } else {
+    document.getElementById('live-map-badge').innerHTML = '<span class="live-dot-red"></span>Carte indisponible pour ce départ';
+  }
+
+  document.getElementById('calendar-cta-btn').onclick = () => saveTripToCalendar(c);
+
+  document.getElementById('maps-cta-btn').onclick = () => {
+    const destCoord = selectedPlaceWalk ? selectedPlaceWalk.coordinate : c.to.station.coordinate;
+
+    // Garde-fou : ce bouton sert au DERNIER tronçon à pied, une fois vraiment sur place
+    // (ta position réelle en direct, utile pour sortir de grandes gares par le bon côté).
+    // S'il est pressé trop tôt (avant même le trajet en transport), on avertit plutôt que
+    // de calculer une marche absurde sur toute la distance.
+    const WALK_SANITY_LIMIT_M = 1500;
+    if(userCoords && destCoord && destCoord.x && destCoord.y){
+      const straightDist = haversineMeters(userCoords.lat, userCoords.lon, destCoord.x, destCoord.y);
+      if(straightDist > WALK_SANITY_LIMIT_M){
+        showToast(`Vous semblez encore loin (≈ ${(straightDist/1000).toFixed(1)} km à vol d'oiseau) — ce bouton est prévu pour le dernier tronçon à pied, une fois arrivé(e) à l'arrêt. Prenez d'abord votre transport, puis ouvrez ce lien sur place.`, 6000);
+        return;
+      }
+    }
+
+    let url = 'https://www.google.com/maps/dir/?api=1&travelmode=walking';
+    if(userCoords){
+      url += `&origin=${userCoords.lat},${userCoords.lon}`;
+    }
+    if(destCoord && destCoord.x && destCoord.y){
+      url += `&destination=${destCoord.x},${destCoord.y}`;
+    } else {
+      url += `&destination=${encodeURIComponent(c.to.station.name)}`;
+    }
+    window.open(url, '_blank');
+  };
+}
+</script>
+
+</body>
+</html>
