@@ -28,6 +28,13 @@
   .flapboard{ margin:14px 20px 8px; background:var(--ink); border-radius:14px; padding:14px 16px; font-family:'IBM Plex Mono',monospace; }
   .flap-header{ display:flex; justify-content:space-between; color:#8B93A0; font-size:10px; letter-spacing:.1em; text-transform:uppercase; margin-bottom:6px; }
   .flap-stopgroup{ display:flex; justify-content:space-between; align-items:center; padding:11px 0 5px; color:#C7CCD4; font-size:11.5px; font-weight:600; }
+  .flap-direction-label{ color:#6F7787; font-family:'IBM Plex Mono',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; padding:9px 0 3px; border-top:1px solid rgba(255,255,255,.08); }
+  .flap-direction-grey{ background:rgba(255,255,255,.10); border-radius:8px; margin:0 -8px; padding:2px 8px 4px; }
+  .flap-direction-grey .flap-dest{ color:#5B6472; font-weight:500; }
+  .flap-direction-grey .flap-line{ color:#5B6472; background:rgba(255,255,255,.03); }
+  .flap-direction-grey .flap-time:not(.delay){ color:#5B6472; }
+  .flap-direction-grey .flap-mode{ opacity:.35; filter:grayscale(1); }
+  .flap-direction-label:first-child{ border-top:none; padding-top:2px; }
   .flap-stopgroup:first-of-type{ padding-top:2px; }
   .flap-stopgroup .stop-dist{ color:#6F7787; font-weight:500; }
   .flap-row{ display:flex; align-items:center; gap:9px; padding:7px 0; border-top:1px solid rgba(255,255,255,.08); }
@@ -298,7 +305,7 @@
         <div class="autocomplete" id="autocomplete-station"></div>
       </div>
     </div>
-    <p class="value-note" style="margin:0 20px 10px;">Tapez le nom d'une ville (pas "gare" en plus — juste le nom, ex. "Lausanne"), sélectionnez-la dans la liste. Tableau des départs (trains uniquement), actualisé automatiquement toutes les 20 s. Il n'existe pas de tableau des arrivées séparé dans les données suisses officielles — comme sur les vrais écrans de gare, ce sont les départs qui comptent pour savoir où aller.</p>
+    <p class="value-note" style="margin:0 20px 10px;">Tapez le nom d'une ville (pas "gare" en plus — juste le nom, ex. "Lausanne"), sélectionnez-la dans la liste. Tableau des départs (trains uniquement), actualisé automatiquement toutes les 45 s. Il n'existe pas de tableau des arrivées séparé dans les données suisses officielles — comme sur les vrais écrans de gare, ce sont les départs qui comptent pour savoir où aller.</p>
     <div id="station-board"></div>
   </div>
 
@@ -544,7 +551,7 @@ function startHomeBoardRefresh(){
     const fresh = await getFreshPosition();
     if(fresh) userCoords = fresh;
     if(nearbyStations.length > 0) loadNearbyDepartures();
-  }, 20000);
+  }, 45000);
 }
 function stopHomeBoardRefresh(){
   if(homeBoardInterval){ clearInterval(homeBoardInterval); homeBoardInterval = null; }
@@ -600,55 +607,58 @@ async function loadNearbyDepartures(){
 
 async function renderStationGroup(station){
   const dist = station.distance ? Math.round(station.distance) + ' m · ' + walkMinutes(station.distance) + "′" : '';
-  let rowsHtml = '<div class="flap-empty">Aucun départ imminent.</div>';
+  let bodyHtml = '<div class="flap-empty">Aucun départ imminent.</div>';
+  let directionSuffix = '';
   try{
-    // On récupère plus large (12), puis on ne garde que le PROCHAIN départ de chaque ligne distincte
-    // (catégorie + numéro + direction) — utile pour les grandes stations (ex. Chauderon avec LEB + bus)
-    // où sinon la même ligne répétée 3 fois remplirait tout le tableau au lieu de montrer la diversité.
+    // On récupère large (20), puis on regroupe PAR DIRECTION (destination finale) plutôt que
+    // de tout mélanger trié uniquement par heure — plus lisible sur un écran qui défile librement.
     const dtParam = homeTimeOffsetMin !== 0 ? `&datetime=${encodeURIComponent(formatOffsetDatetime(homeTimeOffsetMin))}` : '';
-    const res = await fetch(`${API}/stationboard?id=${station.id}&limit=12${dtParam}`);
+    const res = await fetch(`${API}/stationboard?id=${station.id}&limit=20${dtParam}`);
     const data = await res.json();
-    const seenLines = new Set();
-    const deduped = [];
-    for(const j of (data.stationboard || [])){
-      const lineKey = `${j.category}${j.number}→${j.to}`;
-      if(!seenLines.has(lineKey)){
-        seenLines.add(lineKey);
-        deduped.push(j);
-      }
-      if(deduped.length >= 5) break;
+    const board = data.stationboard || [];
+
+    // Regroupement par destination, en conservant l'ordre chronologique dans chaque groupe
+    const byDirection = new Map();
+    for(const j of board){
+      const key = j.to || '?';
+      if(!byDirection.has(key)) byDirection.set(key, []);
+      if(byDirection.get(key).length < 3) byDirection.get(key).push(j); // 3 prochains départs par direction
     }
 
-    const rows = deduped.map(j => {
-      const mode = iconForCategory(j.category);
-      const delay = computeDelayMin(j.stop);
-      const timeCls = delay > 0 ? 'flap-time delay' : 'flap-time';
-      const badge = delay > 0 ? `<span class="flap-badge badge-delay">+${delay} min</span>` : `<span class="flap-badge badge-ontime">à l'heure</span>`;
-      const t = fmtTime(j.stop.departure);
-      const lineNum = j.number || j.category || '';
+    const directions = [...byDirection.keys()];
+    directionSuffix = directions.length ? ` <span style="color:#8B93A0; font-weight:500;">→ ${directions.slice(0,2).join(', ')}</span>` : '';
 
-      // Attrapable à pied depuis votre position actuelle ? Et si oui, avant quelle heure faut-il partir ?
-      const r = getReachability(station.coordinate, j.stop.departure);
-      const reachNote = reachabilityNoteHtml(r);
-      const destStyle = r?.status === 'unreachable' ? 'color:var(--amber); font-weight:700;' : (r?.status === 'urgent' ? 'color:var(--coral); font-weight:700;' : '');
+    if(directions.length === 0){
+      bodyHtml = '<div class="flap-empty">Aucun départ imminent.</div>';
+    } else {
+      bodyHtml = directions.map((dest, dirIdx) => {
+        const isGrey = dirIdx % 2 === 1;
+        const rows = byDirection.get(dest).map(j => {
+          const mode = iconForCategory(j.category);
+          const delay = computeDelayMin(j.stop);
+          const timeCls = delay > 0 ? 'flap-time delay' : 'flap-time';
+          const badge = delay > 0 ? `<span class="flap-badge badge-delay">+${delay} min</span>` : `<span class="flap-badge badge-ontime">à l'heure</span>`;
+          const t = fmtTime(j.stop.departure);
+          const lineNum = j.number || j.category || '';
 
-      return `<div class="flap-row">
-        <span class="${timeCls}">${t}</span>
-        <div class="flap-mode ${mode.cls}">${mode.icon}</div>
-        <span class="flap-line">${lineNum}</span>
-        <span class="flap-dest" style="${destStyle}">${j.to || ''}</span>
-        ${badge}
-      </div>${reachNote}`;
-    });
-    if(rows.length) rowsHtml = rows.join('');
+          const r = getReachability(station.coordinate, j.stop.departure);
+          const reachNote = reachabilityNoteHtml(r);
+          const destStyle = r?.status === 'unreachable' ? 'color:var(--amber); font-weight:700;' : (r?.status === 'urgent' ? 'color:var(--coral); font-weight:700;' : '');
 
-    // Si deux arrêts proches portent le même nom (sens opposés), la seule façon de les distinguer
-    // au premier coup d'œil est d'indiquer les directions desservies directement dans le titre.
-    var directions = [...new Set(deduped.map(j => j.to).filter(Boolean))].slice(0, 2);
-    var directionSuffix = directions.length ? ` <span style="color:#8B93A0; font-weight:500;">→ ${directions.join(', ')}</span>` : '';
-  } catch(e){ rowsHtml = '<div class="flap-empty">Erreur de chargement.</div>'; var directionSuffix = ''; }
+          return `<div class="flap-row">
+            <span class="${timeCls}">${t}</span>
+            <div class="flap-mode ${mode.cls}">${mode.icon}</div>
+            <span class="flap-line">${lineNum}</span>
+            <span class="flap-dest" style="${destStyle}">${j.to || ''}</span>
+            ${badge}
+          </div>${reachNote}`;
+        }).join('');
+        return `<div class="flap-direction-block${isGrey ? ' flap-direction-grey' : ''}"><div class="flap-direction-label">→ ${dest}</div>${rows}</div>`;
+      }).join('');
+    }
+  } catch(e){ bodyHtml = '<div class="flap-empty">Erreur de chargement.</div>'; }
 
-  return `<div class="flap-stopgroup"><span>🚏 ${station.name}${directionSuffix}</span><span class="stop-dist">${dist}</span></div>${rowsHtml}`;
+  return `<div class="flap-stopgroup"><span>🚏 ${station.name}${directionSuffix}</span><span class="stop-dist">${dist}</span></div>${bodyHtml}`;
 }
 
 function useCurrentLocation(){
@@ -1145,7 +1155,7 @@ async function loadStationScreen(forceRefresh){
   stopStationBoardRefresh();
   stationBoardInterval = setInterval(() => {
     verifiedGares.forEach(g => refreshOneStationBoard(g.id, g.name, g.distance, g.coordinate));
-  }, 20000);
+  }, 45000);
 
   startGareLocationWatch();
 }
@@ -1170,7 +1180,7 @@ async function refreshOneStationBoard(id, name, distance, coordinate){
     const dtParam = gareTimeOffsetMin !== 0 ? `&datetime=${encodeURIComponent(formatOffsetDatetime(gareTimeOffsetMin))}` : '';
     const res = await fetch(`${API}/stationboard?id=${id}&limit=25${dtParam}`);
     const data = await res.json();
-    const trains = (data.stationboard || []).filter(j => TRAIN_CATEGORIES.includes((j.category || '').toUpperCase())).slice(0, 10);
+    const trains = (data.stationboard || []).filter(j => TRAIN_CATEGORIES.includes((j.category || '').toUpperCase()));
     const distTxt = distance ? ` · ${Math.round(distance)} m` : '';
 
     if(trains.length === 0){
@@ -1178,31 +1188,43 @@ async function refreshOneStationBoard(id, name, distance, coordinate){
       return;
     }
 
-    const rows = trains.map(j => {
-      const delay = computeDelayMin(j.stop);
-      const timeCls = delay > 0 ? 'flap-time delay' : 'flap-time';
-      const badge = delay > 0 ? `<span class="flap-badge badge-delay">+${delay} min</span>` : `<span class="flap-badge badge-ontime">à l'heure</span>`;
-      const t = fmtTime(j.stop.departure);
-      const lineNum = j.number || j.category || '';
-      const platform = j.stop.platform ? 'quai ' + j.stop.platform : '';
-      const searchQuery = encodeURIComponent(`SBB CFF FFS ${j.category || ''} ${j.number || ''} horaire arrêts ${name}`);
-      const searchUrl = `https://www.google.com/search?q=${searchQuery}`;
+    // Regroupement par direction (destination finale), comme sur le tableau d'accueil
+    const byDirection = new Map();
+    for(const j of trains){
+      const key = j.to || '?';
+      if(!byDirection.has(key)) byDirection.set(key, []);
+      if(byDirection.get(key).length < 4) byDirection.get(key).push(j);
+    }
+    const directions = [...byDirection.keys()];
 
-      // Ce train est-il encore attrapable à pied ? Et si oui, avant quelle heure faut-il partir ?
-      const r = getReachability(coordinate, j.stop.departure);
-      const reachNote = reachabilityNoteHtml(r);
-      const destStyle = r?.status === 'unreachable' ? 'color:var(--amber); font-weight:700;' : (r?.status === 'urgent' ? 'color:var(--coral); font-weight:700;' : '');
+    const bodyHtml = directions.map((dest, dirIdx) => {
+      const isGrey = dirIdx % 2 === 1;
+      const rows = byDirection.get(dest).map(j => {
+        const delay = computeDelayMin(j.stop);
+        const timeCls = delay > 0 ? 'flap-time delay' : 'flap-time';
+        const badge = delay > 0 ? `<span class="flap-badge badge-delay">+${delay} min</span>` : `<span class="flap-badge badge-ontime">à l'heure</span>`;
+        const t = fmtTime(j.stop.departure);
+        const lineNum = j.number || j.category || '';
+        const platform = j.stop.platform ? 'quai ' + j.stop.platform : '';
+        const searchQuery = encodeURIComponent(`SBB CFF FFS ${j.category || ''} ${j.number || ''} horaire arrêts ${name}`);
+        const searchUrl = `https://www.google.com/search?q=${searchQuery}`;
 
-      return `<div class="flap-row">
-        <span class="${timeCls}">${t}</span>
-        <div class="flap-mode mode-train">🚆</div>
-        <span class="flap-line">${lineNum}</span>
-        <a href="${searchUrl}" target="_blank" class="flap-dest" style="text-decoration:underline; text-underline-offset:2px; ${destStyle}">${j.to || ''} ↗</a>
-        ${badge}
-      </div>${platform ? `<div style="padding:0 0 6px 91px; font-size:10.5px; color:#8B93A0; font-family:'IBM Plex Mono',monospace;">${platform}</div>` : ''}${reachNote}`;
+        const r = getReachability(coordinate, j.stop.departure);
+        const reachNote = reachabilityNoteHtml(r);
+        const destStyle = r?.status === 'unreachable' ? 'color:var(--amber); font-weight:700;' : (r?.status === 'urgent' ? 'color:var(--coral); font-weight:700;' : '');
+
+        return `<div class="flap-row">
+          <span class="${timeCls}">${t}</span>
+          <div class="flap-mode mode-train">🚆</div>
+          <span class="flap-line">${lineNum}</span>
+          <a href="${searchUrl}" target="_blank" class="flap-dest" style="text-decoration:underline; text-underline-offset:2px; ${destStyle}">${j.to || ''} ↗</a>
+          ${badge}
+        </div>${platform ? `<div style="padding:0 0 6px 91px; font-size:10.5px; color:#8B93A0; font-family:'IBM Plex Mono',monospace;">${platform}</div>` : ''}${reachNote}`;
+      }).join('');
+      return `<div class="flap-direction-block${isGrey ? ' flap-direction-grey' : ''}"><div class="flap-direction-label">→ ${dest}</div>${rows}</div>`;
     }).join('');
 
-    slot.innerHTML = `<div class="flapboard"><div class="flap-header"><span>${name}${distTxt}</span><span>Temps réel</span></div>${rows}</div>`;
+    slot.innerHTML = `<div class="flapboard"><div class="flap-header"><span>${name}${distTxt}</span><span>Temps réel</span></div>${bodyHtml}</div>`;
   } catch(e){
     slot.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Impossible de charger ${name} : ${e.message || e}</div>`;
   }
