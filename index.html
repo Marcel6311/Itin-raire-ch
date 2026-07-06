@@ -1492,6 +1492,31 @@ const PRICE_LABELS = {
 // ---------- Section "À voir" : sites touristiques réels (OpenTripMap) ----------
 let visitMode = 'destination'; // 'destination' ou 'position'
 
+// Stades des clubs de Super League / Challenge League suisses (approximatif, à vérifier
+// périodiquement car les clubs peuvent changer de division d'une saison à l'autre)
+const SWISS_STADIUMS = [
+  { club: 'Lausanne-Sport', name: 'de la Tuilière', lat: 46.5563, lon: 6.6178 },
+  { club: 'Young Boys', name: 'Wankdorf', lat: 46.9631, lon: 7.4644 },
+  { club: 'FC Basel', name: 'St. Jakob-Park', lat: 47.5410, lon: 7.6298 },
+  { club: 'FC Zürich / Grasshopper', name: 'Letzigrund', lat: 47.3778, lon: 8.5042 },
+  { club: 'Servette FC', name: 'de Genève', lat: 46.1817, lon: 6.1183 },
+  { club: 'FC St. Gallen', name: 'Kybunpark', lat: 47.4306, lon: 9.3181 },
+  { club: 'FC Lucerne', name: 'Swissporarena', lat: 47.0324, lon: 8.3128 },
+  { club: 'FC Sion', name: 'Tourbillon', lat: 46.2306, lon: 7.3706 },
+  { club: 'Yverdon Sport', name: 'Municipal', lat: 46.7775, lon: 6.6467 },
+  { club: 'FC Winterthur', name: 'Schützenwiese', lat: 47.5044, lon: 8.7261 },
+  { club: 'FC Thoune', name: 'Stockhorn Arena', lat: 46.7594, lon: 7.6208 },
+  { club: 'FC Lugano', name: 'Cornaredo', lat: 46.0181, lon: 8.9622 }
+];
+
+function findNearbyStadium(lat, lon){
+  for(const s of SWISS_STADIUMS){
+    const dist = haversineMeters(lat, lon, s.lat, s.lon);
+    if(dist < 1200) return { ...s, dist };
+  }
+  return null;
+}
+
 async function loadVisitScreen(mode){
   if(mode) visitMode = mode;
   const content = document.getElementById('visit-content');
@@ -1534,11 +1559,21 @@ async function loadVisitScreen(mode){
     document.getElementById('visit-title').textContent = lastAroundLabel;
   }
 
+  const nearbyStadium = findNearbyStadium(lat, lon);
+  const stadiumCardHtml = nearbyStadium ? `
+    <div class="agenda-card" style="background:#1B4C57;">
+      <div class="agenda-title">⚽ ${nearbyStadium.club} joue ici</div>
+      <div class="agenda-sub">Stade ${nearbyStadium.name}, à ${Math.round(nearbyStadium.dist)} m. Le calendrier officiel des matchs (Swiss Football League) n'est pas filtré par stade, mais tu y trouveras les dates et heures de ${nearbyStadium.club}.</div>
+      <a class="agenda-link" href="https://sfl.ch/calendar/calendrier-superleague" target="_blank">Voir le calendrier SFL ↗</a>
+    </div>
+  ` : '';
+
   body.innerHTML = `
     <p class="meta-txt" style="margin:10px 20px 10px; font-family:'IBM Plex Mono',monospace;">
       📍 Recherche autour de ${lat.toFixed(5)}, ${lon.toFixed(5)} —
       <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" style="color:var(--lake);">vérifier sur Maps ↗</a>
     </p>
+    ${stadiumCardHtml}
     <p class="value-note" style="margin-top:10px;">Sites et lieux référencés sur Wikipedia à proximité, triés par distance.</p>
     <div id="around-attractions-list"><div class="flap-loading" style="padding:0 20px;">Recherche des sites à proximité…</div></div>
 
