@@ -44,7 +44,7 @@
   .mode-train{background:var(--coral);} .mode-bus{background:var(--lake);} .mode-boat{background:#3A6EA5;} .mode-tram{background:#7B5EA7;}
   .flap-dest{ color:#FFFFFF; font-size:12.5px; font-weight:700; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .flap-line{ color:#FFFFFF; font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:700; background:rgba(255,255,255,.14); padding:2px 7px; border-radius:6px; flex-shrink:0; }
-  .flap-badge{ font-size:9.5px; padding:2px 6px; border-radius:20px; font-weight:600; flex-shrink:0; }
+  .flap-badge{ font-size:11px; padding:3px 6px; border-radius:6px; font-weight:700; flex-shrink:0; min-width:26px; text-align:center; }
   .badge-ontime{ background:rgba(76,140,74,.3); color:#B7F0B4; font-weight:700; }
   .badge-delay{ background:rgba(228,87,46,.3); color:#FFC4AE; font-weight:700; }
   .quai-info{ color:#FFFFFF; }
@@ -526,6 +526,13 @@ function computeDelayMin(stop){
   return 0;
 }
 
+// Heure réelle d'arrivée (horaire prévu + retard) — comme sur les vrais panneaux de gare,
+// qui trient les passages par heure réelle, pas par horaire théorique seul.
+function actualDepartureTime(j){
+  const delay = computeDelayMin(j.stop);
+  return new Date(j.stop.departure).getTime() + delay * 60000;
+}
+
 // ---------- Géolocalisation + tableau des départs ----------
 function initGeolocation(){
   if(!('geolocation' in navigator)){
@@ -624,7 +631,7 @@ async function renderStationGroup(station){
     const dtParam = homeTimeOffsetMin !== 0 ? `&datetime=${encodeURIComponent(formatOffsetDatetime(homeTimeOffsetMin))}` : '';
     const res = await fetch(`${API}/stationboard?id=${station.id}&limit=20${dtParam}`);
     const data = await res.json();
-    const board = data.stationboard || [];
+    const board = (data.stationboard || []).sort((a, b) => actualDepartureTime(a) - actualDepartureTime(b));
 
     const groupByQuai = board.some(j => j.stop.platform);
     const byGroup = new Map();
@@ -650,7 +657,7 @@ async function renderStationGroup(station){
           const mode = iconForCategory(j.category);
           const delay = computeDelayMin(j.stop);
           const timeCls = delay > 0 ? 'flap-time delay' : 'flap-time';
-          const badge = delay > 0 ? `<span class="flap-badge badge-delay">+${delay} min</span>` : `<span class="flap-badge badge-ontime">à l'heure</span>`;
+          const badge = delay > 0 ? `<span class="flap-badge badge-delay">+${delay}</span>` : `<span class="flap-badge badge-ontime">0</span>`;
           const t = fmtTime(j.stop.departure);
           const lineNum = j.number || j.category || '';
 
@@ -659,11 +666,11 @@ async function renderStationGroup(station){
           const destStyle = r?.status === 'unreachable' ? 'color:var(--amber); font-weight:700;' : (r?.status === 'urgent' ? 'color:var(--coral); font-weight:700;' : '');
 
           return `<div class="flap-row">
+            ${badge}
             <span class="${timeCls}">${t}</span>
             <div class="flap-mode ${mode.cls}">${mode.icon}</div>
             <span class="flap-line">${lineNum}</span>
             <span class="flap-dest" style="${destStyle}">${j.to || ''}</span>
-            ${badge}
           </div>${reachNote}`;
         }).join('');
         const label = groupByQuai ? groupKey : '→ ' + groupKey;
@@ -1194,7 +1201,8 @@ async function refreshOneStationBoard(id, name, distance, coordinate){
     const dtParam = gareTimeOffsetMin !== 0 ? `&datetime=${encodeURIComponent(formatOffsetDatetime(gareTimeOffsetMin))}` : '';
     const res = await fetch(`${API}/stationboard?id=${id}&limit=25${dtParam}`);
     const data = await res.json();
-    const trains = (data.stationboard || []).filter(j => TRAIN_CATEGORIES.includes((j.category || '').toUpperCase()));
+    const trains = (data.stationboard || [])
+      .filter(j => TRAIN_CATEGORIES.includes((j.category || '').toUpperCase()));
     const distTxt = distance ? ` · ${Math.round(distance)} m` : '';
 
     if(trains.length === 0){
