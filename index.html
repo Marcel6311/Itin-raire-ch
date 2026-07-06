@@ -469,7 +469,13 @@ function haversineMeters(lat1, lon1, lat2, lon2){
   const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
-function walkMinutes(meters){ return Math.max(1, Math.round(meters / 80)); } // ~4.8 km/h
+function walkMinutes(meters){
+  const raw = Math.max(1, Math.round(meters / 80)); // ~4.8 km/h
+  // Sur de très courtes distances, l'estimation à vol d'oiseau est la moins fiable
+  // (traverser une rue, contourner un bâtiment, attendre un feu piéton...) — on ajoute
+  // une marge de sécurité de 3 min quand le calcul brut donne 1 min.
+  return raw === 1 ? raw + 3 : raw;
+}
 
 // Calcule, pour un départ donné, si on peut encore l'attraper à pied depuis la position actuelle,
 // et surtout À QUELLE HEURE il faut partir — plus utile qu'un simple "trop juste" après coup.
