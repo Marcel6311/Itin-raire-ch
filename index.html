@@ -46,6 +46,8 @@
   .flap-line{ color:#FFFFFF; font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:700; background:rgba(255,255,255,.14); padding:2px 7px; border-radius:6px; flex-shrink:0; }
   .flap-badge{ font-size:11px; padding:3px 6px; border-radius:6px; font-weight:700; flex-shrink:0; min-width:26px; text-align:center; }
   .flap-countdown{ font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:700; color:#FFFFFF; background:rgba(255,255,255,.12); padding:3px 8px; border-radius:6px; flex-shrink:0; min-width:44px; text-align:center; }
+  .flap-next-summary{ display:flex; align-items:center; gap:9px; background:rgba(228,87,46,.18); border:1px solid rgba(228,87,46,.4); border-radius:10px; padding:9px 10px; margin:2px 0 12px; }
+  .flap-next-label{ font-family:'IBM Plex Mono',monospace; font-size:10px; color:#FFFFFF; text-transform:uppercase; letter-spacing:.05em; flex-shrink:0; }
   .badge-ontime{ background:rgba(76,140,74,.3); color:#B7F0B4; font-weight:700; }
   .badge-delay{ background:rgba(228,87,46,.3); color:#FFC4AE; font-weight:700; }
   .quai-info{ color:#FFFFFF; }
@@ -615,8 +617,30 @@ async function loadNearbyDepartures(){
       board.innerHTML = '<div class="flap-header"><span>Arrêts à proximité</span><span>—</span></div><div class="flap-empty">Aucun arrêt trouvé à proximité.</div>';
       return;
     }
-    const groupsHtml = await Promise.all(nearbyStations.map(renderStationGroup));
-    board.innerHTML = '<div class="flap-header"><span>' + nearbyStations.length + ' arrêt(s) à proximité</span><span>Temps réel</span></div>' + groupsHtml.join('');
+    const results = await Promise.all(nearbyStations.map(renderStationGroup));
+    const groupsHtml = results.map(r => r.html).join('');
+
+    // Le tout premier départ, tous arrêts confondus — accessible immédiatement en haut du tableau
+    const earliestAll = results.map(r => r.earliest).filter(Boolean)
+      .sort((a, b) => actualDepartureTime(a.j) - actualDepartureTime(b.j))[0];
+
+    let summaryHtml = '';
+    if(earliestAll){
+      const j = earliestAll.j;
+      const mode = iconForCategory(j.category);
+      const lineNum = j.number || j.category || '';
+      const minutesLeft = Math.max(0, Math.round((actualDepartureTime(j) - Date.now()) / 60000));
+      const countdownTxt = minutesLeft === 0 ? 'maintenant' : minutesLeft + ' min';
+      summaryHtml = `<div class="flap-next-summary">
+        <span class="flap-next-label">🔜 Prochain départ</span>
+        <div class="flap-mode ${mode.cls}">${mode.icon}</div>
+        <span class="flap-line">${lineNum}</span>
+        <span class="flap-dest">${j.to || ''}</span>
+        <span class="flap-countdown">${countdownTxt}</span>
+      </div>`;
+    }
+
+    board.innerHTML = '<div class="flap-header"><span>' + nearbyStations.length + ' arrêt(s) à proximité</span><span>Temps réel</span></div>' + summaryHtml + groupsHtml;
   } catch(e){
     board.innerHTML = '<div class="flap-header"><span>Arrêts à proximité</span><span>—</span></div><div class="flap-empty">Erreur réseau — tirez pour rafraîchir.</div>';
   }
@@ -626,13 +650,14 @@ async function renderStationGroup(station){
   const dist = station.distance ? Math.round(station.distance) + ' m · ' + walkMinutes(station.distance) + "′" : '';
   let bodyHtml = '<div class="flap-empty">Aucun départ imminent.</div>';
   let directionSuffix = '';
+  let board = [];
   try{
     // On récupère large (20), puis on regroupe PAR QUAI quand l'info existe (vue d'ensemble de la
     // place en un coup d'œil), sinon par direction — plutôt que de tout mélanger trié par heure.
     const dtParam = homeTimeOffsetMin !== 0 ? `&datetime=${encodeURIComponent(formatOffsetDatetime(homeTimeOffsetMin))}` : '';
     const res = await fetch(`${API}/stationboard?id=${station.id}&limit=20${dtParam}`);
     const data = await res.json();
-    const board = (data.stationboard || []).sort((a, b) => actualDepartureTime(a) - actualDepartureTime(b));
+    board = (data.stationboard || []).sort((a, b) => actualDepartureTime(a) - actualDepartureTime(b));
 
     const groupByQuai = board.some(j => j.stop.platform);
     const byGroup = new Map();
@@ -686,7 +711,11 @@ async function renderStationGroup(station){
     }
   } catch(e){ bodyHtml = '<div class="flap-empty">Erreur de chargement.</div>'; }
 
-  return `<div class="flap-stopgroup"><span>🚏 ${station.name}${directionSuffix}</span><span class="stop-dist">${dist}</span></div>${bodyHtml}`;
+  const earliest = board.length > 0 ? { j: board[0], station } : null;
+  return {
+    html: `<div class="flap-stopgroup"><span>🚏 ${station.name}${directionSuffix}</span><span class="stop-dist">${dist}</span></div>${bodyHtml}`,
+    earliest
+  };
 }
 
 function useCurrentLocation(){
