@@ -45,6 +45,7 @@
   .flap-dest{ color:#FFFFFF; font-size:12.5px; font-weight:700; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .flap-line{ color:#FFFFFF; font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:700; background:rgba(255,255,255,.14); padding:2px 7px; border-radius:6px; flex-shrink:0; }
   .flap-badge{ font-size:11px; padding:3px 6px; border-radius:6px; font-weight:700; flex-shrink:0; min-width:26px; text-align:center; }
+  .flap-countdown{ font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:700; color:#FFFFFF; background:rgba(255,255,255,.12); padding:3px 8px; border-radius:6px; flex-shrink:0; min-width:44px; text-align:center; }
   .badge-ontime{ background:rgba(76,140,74,.3); color:#B7F0B4; font-weight:700; }
   .badge-delay{ background:rgba(228,87,46,.3); color:#FFC4AE; font-weight:700; }
   .quai-info{ color:#FFFFFF; }
@@ -661,6 +662,11 @@ async function renderStationGroup(station){
           const t = fmtTime(j.stop.departure);
           const lineNum = j.number || j.category || '';
 
+          // Compte à rebours en minutes jusqu'au départ réel (horaire + retard) — comme la colonne
+          // "TEMPS" du vrai panneau TL, calculé à partir des mêmes données temps réel.
+          const minutesLeft = Math.max(0, Math.round((actualDepartureTime(j) - Date.now()) / 60000));
+          const countdownTxt = minutesLeft === 0 ? 'maintenant' : minutesLeft + ' min';
+
           const r = getReachability(station.coordinate, j.stop.departure);
           const reachNote = reachabilityNoteHtml(r);
           const destStyle = r?.status === 'unreachable' ? 'color:var(--amber); font-weight:700;' : (r?.status === 'urgent' ? 'color:var(--coral); font-weight:700;' : '');
@@ -671,6 +677,7 @@ async function renderStationGroup(station){
             <div class="flap-mode ${mode.cls}">${mode.icon}</div>
             <span class="flap-line">${lineNum}</span>
             <span class="flap-dest" style="${destStyle}">${j.to || ''}</span>
+            <span class="flap-countdown">${countdownTxt}</span>
           </div>${reachNote}`;
         }).join('');
         const label = groupByQuai ? groupKey : '→ ' + groupKey;
