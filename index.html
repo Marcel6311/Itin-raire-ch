@@ -49,6 +49,9 @@
   .flap-next-summary{ background:rgba(228,87,46,.18); border:1px solid rgba(228,87,46,.4); border-radius:10px; padding:9px 10px; margin:2px 0 12px; }
   .flap-next-label{ font-family:'IBM Plex Mono',monospace; font-size:10px; color:#FFFFFF; text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
   .flap-next-row{ display:flex; align-items:center; gap:9px; padding:4px 0; }
+  .trend-dot{ display:inline-block; width:9px; height:9px; border-radius:50%; vertical-align:middle; margin-left:3px; }
+  .trend-good{ background:#4CD964; box-shadow:0 0 5px rgba(76,217,100,.7); }
+  .trend-bad{ background:#FF3B30; box-shadow:0 0 5px rgba(255,59,48,.7); }
   .badge-ontime{ background:rgba(76,140,74,.3); color:#B7F0B4; font-weight:700; }
   .badge-delay{ background:rgba(228,87,46,.3); color:#FFC4AE; font-weight:700; }
   .quai-info{ color:#FFFFFF; }
@@ -660,8 +663,23 @@ async function loadNearbyDepartures(){
   }
 }
 
+// Mémorise la dernière distance connue par arrêt, pour détecter si on s'en rapproche (vert)
+// ou si on s'en éloigne (rouge) entre deux actualisations.
+const lastKnownDistances = {};
+
 async function renderStationGroup(station){
-  const dist = station.distance ? Math.round(station.distance) + ' m · ' + walkMinutes(station.distance) + "′" : '';
+  let trendDot = '';
+  if(station.distance){
+    const prev = lastKnownDistances[station.id];
+    if(typeof prev === 'number'){
+      const deltaM = station.distance - prev;
+      // Seuil de 8 m pour ignorer le simple bruit GPS (précision typique de quelques mètres)
+      if(deltaM < -8) trendDot = ' <span class="trend-dot trend-good" title="Vous vous rapprochez"></span>';
+      else if(deltaM > 8) trendDot = ' <span class="trend-dot trend-bad" title="Vous vous éloignez"></span>';
+    }
+    lastKnownDistances[station.id] = station.distance;
+  }
+  const dist = station.distance ? Math.round(station.distance) + ' m · ' + walkMinutes(station.distance) + "′" + trendDot : '';
   let bodyHtml = '<div class="flap-empty">Aucun départ imminent.</div>';
   let directionSuffix = '';
   let board = [];
