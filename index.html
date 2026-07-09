@@ -1481,9 +1481,9 @@ async function loadAroundScreen(mode){
     </div>
 
     <div class="sort-row">
-      <div class="chip active" data-sort="value">⭐ Qualité-prix</div>
+      <div class="chip ${aroundMode === 'position' ? '' : 'active'}" data-sort="value">⭐ Qualité-prix</div>
       <div class="chip" data-sort="rating">🏅 Mieux noté</div>
-      <div class="chip" data-sort="distance">📍 Plus proche</div>
+      <div class="chip ${aroundMode === 'position' ? 'active' : ''}" data-sort="distance">📍 Plus proche</div>
     </div>
     <p class="value-note">Rapport qualité-prix estimé à partir de la note Google et du niveau de prix — pas un classement officiel (pas de données Michelin/GaultMillau intégrées pour l'instant).</p>
     <div id="around-places-list"><div class="flap-loading" style="padding:0 20px;">Recherche des restaurants à proximité…</div></div>
