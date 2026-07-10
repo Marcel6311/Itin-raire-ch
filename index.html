@@ -1418,7 +1418,7 @@ const CUISINE_TYPES = [
   { key: 'beef', label: '🥩 Beef', type: 'steak_house' }
 ];
 
-let aroundMode = 'destination'; // 'destination' ou 'position'
+let aroundMode = 'position'; // 'position' (par défaut) ou 'destination'
 
 async function loadAroundScreen(mode){
   if(mode) aroundMode = mode;
@@ -1520,8 +1520,11 @@ async function searchRestaurants(lat, lon, cuisineType){
         'X-Goog-FieldMask': 'places.id,places.displayName,places.rating,places.userRatingCount,places.priceLevel,places.currentOpeningHours.openNow,places.location'
       },
       body: JSON.stringify({
-        includedTypes: [cuisineType],
-        maxResultCount: 14,
+        // Le filtre "Tous" inclut aussi cafés et brasseries : beaucoup d'établissements qui servent
+        // à manger (ex. Le Milan à Lausanne) sont classés "cafe" en type principal chez Google
+        // et échappaient au seul type "restaurant".
+        includedTypes: cuisineType === 'restaurant' ? ['restaurant', 'cafe'] : [cuisineType],
+        maxResultCount: 20,
         locationRestriction: { circle: { center: { latitude: lat, longitude: lon }, radius: 500.0 } }
       })
     });
