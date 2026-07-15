@@ -83,6 +83,7 @@
   }
   .autocomplete.show{ display:block; }
   .ac-item{ padding:11px 14px; font-size:14px; border-bottom:1px solid var(--line); cursor:pointer; display:flex; align-items:center; gap:8px; }
+  .ac-hint{ padding:9px 14px; font-size:11.5px; color:var(--ink-soft); background:var(--lake-dim); line-height:1.4; }
   .ac-item:last-child{ border-bottom:none; }
   .ac-item:active{ background:var(--paper); }
   .ac-item .ac-dist{ margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-soft); flex-shrink:0; }
@@ -805,21 +806,30 @@ function setupAutocomplete(inputId, boxId, kind){
 
 async function fetchAutocomplete(q, boxId, inputId, kind){
   const box = document.getElementById(boxId);
+
+  // Les adresses collées depuis le carnet d'adresses contiennent souvent le code postal
+  // ("Chemin X 10, 1024 Ecublens") — l'API de transport ne le digère pas et renvoie alors
+  // des rues homonymes d'autres villes. On retire le NPA (4 chiffres) de la requête envoyée,
+  // sans toucher à ce qui est affiché dans le champ.
+  const cleanedQuery = q.replace(/\b\d{4}\b\s*/g, '').replace(/\s{2,}/g, ' ').replace(/\s,/g, ',').trim();
+
   let stationItems = [];
   try{
-    const res = await fetch(`${API}/locations?query=${encodeURIComponent(q)}`);
+    const res = await fetch(`${API}/locations?query=${encodeURIComponent(cleanedQuery)}`);
     const data = await res.json();
     stationItems = (data.stations || []).filter(s => s.id);
-    // Tri par proximité avec la position actuelle : une rue homonyme dans une autre ville
-    // (ex. même nom de rue à Zurich) ne passera plus devant celle de TA ville.
-    if(userCoords){
+    // Tri par proximité UNIQUEMENT quand la requête ne précise pas de ville (pas de virgule) :
+    // si l'adresse collée contient déjà la ville, on respecte la pertinence de l'API — sinon
+    // une rue homonyme proche de vous pourrait passer devant la bonne adresse.
+    const hasExplicitCity = cleanedQuery.includes(',');
+    if(userCoords && !hasExplicitCity){
       stationItems.sort((a, b) => {
         const da = a.coordinate ? haversineMeters(userCoords.lat, userCoords.lon, a.coordinate.x, a.coordinate.y) : Infinity;
         const db = b.coordinate ? haversineMeters(userCoords.lat, userCoords.lon, b.coordinate.x, b.coordinate.y) : Infinity;
         return da - db;
       });
     }
-    stationItems = stationItems.slice(0, 4);
+    stationItems = stationItems.slice(0, 8);
   } catch(e){}
 
   // La recherche de lieux (restaurants, commerces...) n'a de sens que pour le champ destination de trajet
@@ -856,7 +866,10 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
     return `<div class="ac-item" data-kind="place" data-idx="${i}"><span>🍽️ ${label}</span></div>`;
   }).join('');
 
-  box.innerHTML = stationsHtml + placesHtml;
+  const hintHtml = stationItems.some(s => s.type === 'address')
+    ? `<div class="ac-hint">💡 Pas la bonne ville ? Ajoutez-la à la fin : "${q.split(',')[0].trim()}, Lausanne"</div>`
+    : '';
+  box.innerHTML = stationsHtml + placesHtml + hintHtml;
 
   box.querySelectorAll('.ac-item[data-kind="station"]').forEach(el => {
     el.addEventListener('mousedown', async () => {
