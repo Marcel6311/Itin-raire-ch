@@ -210,8 +210,11 @@
       </div>
       <div class="field">
         <div class="dot dot-to"></div>
-        <input type="text" id="input-to" placeholder="Destination — rue, arrêt, lieu…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" name="destination-libre">
+        <input type="text" id="input-to" placeholder="Destination — rue, arrêt, lieu…" autocomplete="street-address" autocorrect="off" autocapitalize="off" spellcheck="false" name="destination-rue">
         <div class="autocomplete" id="autocomplete-to"></div>
+      </div>
+      <div class="field" style="margin-top:8px;">
+        <input type="text" id="input-to-city" placeholder="Ville (si le contact ne l'a pas rempli automatiquement)" autocomplete="address-level2" autocorrect="off" autocapitalize="words" spellcheck="false" name="destination-ville" style="font-size:13px;">
       </div>
 
       <div class="sort-row" id="time-mode-row" style="padding:8px 0 0;">
@@ -761,6 +764,16 @@ function useCurrentLocation(){
 document.addEventListener('DOMContentLoaded', () => {
   setupAutocomplete('input-from', 'autocomplete-from', 'origin');
   setupAutocomplete('input-to', 'autocomplete-to', 'destination');
+  document.getElementById('input-to-city').addEventListener('input', () => {
+    const street = document.getElementById('input-to').value.trim();
+    const city = document.getElementById('input-to-city').value.trim();
+    if(street.length >= 2){
+      clearTimeout(window._cityDebounce);
+      window._cityDebounce = setTimeout(() => {
+        fetchAutocomplete(city ? `${street}, ${city}` : street, 'autocomplete-to', 'input-to', 'destination');
+      }, 300);
+    }
+  });
   initGeolocation();
 
   // Pré-remplit la date du jour pour le sélecteur "Arriver à…"
@@ -795,10 +808,13 @@ function setupAutocomplete(inputId, boxId, kind){
   let timer = null;
   input.addEventListener('input', () => {
     clearTimeout(timer);
-    const q = input.value.trim();
+    let q = input.value.trim();
     if(kind === 'origin') selectedOrigin = null;
     else if(kind === 'destination') selectedDestination = null;
     if(q.length < 2){ document.getElementById(boxId).classList.remove('show'); return; }
+    // Si un champ ville séparé existe et contient déjà une valeur, on la combine automatiquement
+    const cityField = document.getElementById(inputId + '-city');
+    if(cityField && cityField.value.trim()) q = `${q}, ${cityField.value.trim()}`;
     timer = setTimeout(() => fetchAutocomplete(q, boxId, inputId, kind), 300);
   });
   input.addEventListener('blur', () => setTimeout(() => document.getElementById(boxId).classList.remove('show'), 200));
