@@ -809,7 +809,17 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
   try{
     const res = await fetch(`${API}/locations?query=${encodeURIComponent(q)}`);
     const data = await res.json();
-    stationItems = (data.stations || []).filter(s => s.id).slice(0, 4);
+    stationItems = (data.stations || []).filter(s => s.id);
+    // Tri par proximité avec la position actuelle : une rue homonyme dans une autre ville
+    // (ex. même nom de rue à Zurich) ne passera plus devant celle de TA ville.
+    if(userCoords){
+      stationItems.sort((a, b) => {
+        const da = a.coordinate ? haversineMeters(userCoords.lat, userCoords.lon, a.coordinate.x, a.coordinate.y) : Infinity;
+        const db = b.coordinate ? haversineMeters(userCoords.lat, userCoords.lon, b.coordinate.x, b.coordinate.y) : Infinity;
+        return da - db;
+      });
+    }
+    stationItems = stationItems.slice(0, 4);
   } catch(e){}
 
   // La recherche de lieux (restaurants, commerces...) n'a de sens que pour le champ destination de trajet
@@ -828,7 +838,13 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
   if(stationItems.length === 0 && placeItems.length === 0){ box.classList.remove('show'); return; }
 
   const stationsHtml = stationItems.map((s, i) => {
-    const distTxt = (userCoords && s.coordinate) ? Math.round(haversineMeters(userCoords.lat, userCoords.lon, s.coordinate.x, s.coordinate.y)) + ' m' : '';
+    let distTxt = '';
+    if(userCoords && s.coordinate){
+      const dm = haversineMeters(userCoords.lat, userCoords.lon, s.coordinate.x, s.coordinate.y);
+      // Au-delà de 3 km, affichage en km bien visible — signal immédiat qu'il s'agit
+      // probablement d'une rue homonyme dans une AUTRE ville.
+      distTxt = dm > 3000 ? `⚠️ ${(dm/1000).toFixed(0)} km` : Math.round(dm) + ' m';
+    }
     return `<div class="ac-item" data-kind="station" data-idx="${i}">
       <span>${s.type === 'address' ? '📍' : '🚏'} ${s.name}</span>
       <span class="ac-dist">${distTxt}</span>
