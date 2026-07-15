@@ -2027,7 +2027,7 @@ function showTripDetail(idx){
 
     steps.push(`<div class="step">
       <div class="step-dot" style="background:var(--amber);">⬇︎</div>
-      <div><div class="step-title">${isLast ? 'Descendez ici — terminus de ce trajet' : 'Descendez à ' + sec.arrival.station.name}</div>
+      <div><div class="step-title">${isLast ? 'Descendez à ' + sec.arrival.station.name + ' — terminus de ce trajet' : 'Descendez à ' + sec.arrival.station.name}</div>
       <div class="step-sub" id="${isLast ? '' : 'alight-sub-'+i}">${arrDelay>0 ? 'Retard signalé +'+arrDelay+' min à l\'arrivée' : 'Arrivée à l\'heure prévue'}</div>
       <div class="step-time">${fmtTime(sec.arrival.arrival)}</div></div>
     </div>`);
