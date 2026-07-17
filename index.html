@@ -671,6 +671,46 @@ async function loadNearbyDepartures(){
 // ou si on s'en éloigne (rouge) entre deux actualisations.
 const lastKnownDistances = {};
 
+// Cache des trajets affichés, pour retrouver le bon "passList" (arrêts intermédiaires) au clic
+let journeyCache = [];
+
+function showPassList(idx){
+  const j = journeyCache[idx];
+  const modal = document.getElementById('place-detail-modal');
+  const body = document.getElementById('place-detail-body');
+  modal.classList.add('show');
+
+  if(!j){
+    body.innerHTML = '<div class="flap-empty" style="padding:20px;">Trajet introuvable.</div>';
+    return;
+  }
+
+  const lineNum = j.number || j.category || '';
+  const passList = j.passList || [];
+
+  if(passList.length === 0){
+    body.innerHTML = `
+      <h2 class="app-title" style="font-size:18px; margin-bottom:8px;">${j.category || ''} ${lineNum} → ${j.to || ''}</h2>
+      <p class="meta-txt">La liste des arrêts intermédiaires n'est pas fournie pour ce passage précis (certaines lignes de bus locales ne la transmettent pas).</p>
+    `;
+    return;
+  }
+
+  const stopsHtml = passList.map((p, i) => {
+    const time = p.departure ? fmtTime(p.departure) : (p.arrival ? fmtTime(p.arrival) : '');
+    const isLast = i === passList.length - 1;
+    return `<div style="display:flex; gap:10px; padding:7px 0; ${isLast ? 'font-weight:700;' : ''}">
+      <span class="meta-txt" style="font-family:'IBM Plex Mono',monospace; min-width:44px;">${time}</span>
+      <span style="font-size:13px;">${p.station?.name || ''}</span>
+    </div>`;
+  }).join('');
+
+  body.innerHTML = `
+    <h2 class="app-title" style="font-size:18px; margin-bottom:10px;">${j.category || ''} ${lineNum} → ${j.to || ''}</h2>
+    <div style="max-height:60vh; overflow-y:auto;">${stopsHtml}</div>
+  `;
+}
+
 async function renderStationGroup(station){
   let trendDot = '';
   if(station.distance){
@@ -732,7 +772,11 @@ async function renderStationGroup(station){
           const reachNote = reachabilityNoteHtml(r);
           const destStyle = r?.status === 'unreachable' ? 'color:var(--amber); font-weight:700;' : (r?.status === 'urgent' ? 'color:var(--coral); font-weight:700;' : '');
 
-          return `<div class="flap-row">
+          // Chaque ligne est cliquable pour voir les arrêts intermédiaires (passList)
+          const journeyKey = journeyCache.length;
+          journeyCache.push(j);
+
+          return `<div class="flap-row" onclick="showPassList(${journeyKey})" style="cursor:pointer;">
             ${badge}
             <span class="${timeCls}">${t}</span>
             <div class="flap-mode ${mode.cls}">${mode.icon}</div>
@@ -1348,11 +1392,14 @@ async function refreshOneStationBoard(id, name, distance, coordinate){
         const reachNote = reachabilityNoteHtml(r);
         const destStyle = r?.status === 'unreachable' ? 'color:var(--amber); font-weight:700;' : (r?.status === 'urgent' ? 'color:var(--coral); font-weight:700;' : '');
 
-        return `<div class="flap-row">
+        const journeyKey = journeyCache.length;
+        journeyCache.push(j);
+
+        return `<div class="flap-row" onclick="showPassList(${journeyKey})" style="cursor:pointer;">
           <span class="${timeCls}">${t}</span>
           <div class="flap-mode mode-train">🚆</div>
           <span class="flap-line">${lineNum}</span>
-          <a href="${searchUrl}" target="_blank" class="flap-dest" style="text-decoration:underline; text-underline-offset:2px; ${destStyle}">${j.to || ''} ↗</a>
+          <span class="flap-dest" style="${destStyle}">${j.to || ''}</span>
           ${badge}
         </div>${platform ? `<div class="quai-info" style="padding:0 0 6px 91px; font-size:10.5px; font-family:'IBM Plex Mono',monospace;">${platform}</div>` : ''}${reachNote}`;
       }).join('');
