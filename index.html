@@ -647,7 +647,9 @@ async function loadNearbyDepartures(){
         const mode = iconForCategory(j.category);
         const lineNum = j.number || j.category || '';
         const countdownTxt = firstMinutes === 0 ? 'maintenant' : firstMinutes + ' min';
-        return `<div class="flap-next-row">
+        const journeyKey = journeyCache.length;
+        journeyCache.push(j);
+        return `<div class="flap-next-row" onclick="showPassList(${journeyKey})" style="cursor:pointer;">
           <div class="flap-mode ${mode.cls}">${mode.icon}</div>
           <span class="flap-line">${lineNum}</span>
           <span class="flap-dest">${j.to || ''}</span>
