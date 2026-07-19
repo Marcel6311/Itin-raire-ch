@@ -918,6 +918,11 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
     const res = await fetch(`${API}/locations?query=${encodeURIComponent(cleanedQuery)}`);
     const data = await res.json();
     stationItems = (data.stations || []).filter(s => s.id);
+    // Sur le champ bateau, on ne propose que les vrais débarcadères (qui ont eux-mêmes
+    // "(lac)" dans leur nom) — inutile de faire défiler des arrêts de bus sans rapport.
+    if(kind === 'boatboard'){
+      stationItems = stationItems.filter(s => /\(lac\)/i.test(s.name));
+    }
     // Tri par proximité UNIQUEMENT pour la destination d'un trajet, et seulement si la requête
     // ne précise pas de ville (pas de virgule). Sur les écrans Gare et Bateau, la pertinence
     // du nom doit toujours primer — sinon un résultat proche mais non pertinent (ex.
