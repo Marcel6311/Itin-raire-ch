@@ -1410,7 +1410,7 @@ async function loadBoatScreen(forceRefresh){
 
   boatInput.addEventListener('focus', renderKnownBoatMatches);
   boatInput.addEventListener('input', renderKnownBoatMatches);
-  boatInput.addEventListener('blur', () => setTimeout(() => boatBox.classList.remove('show'), 200));
+  boatInput.addEventListener('blur', () => setTimeout(() => boatBox.classList.remove('show'), 600));
 
   const board = document.getElementById('boat-board');
 
