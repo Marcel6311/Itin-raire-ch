@@ -1428,43 +1428,27 @@ async function loadBoatScreen(forceRefresh){
   try{
     const res = await fetch(`${API}/locations?query=${encodeURIComponent(query)}`);
     const data = await res.json();
-    const candidates = (data.stations || []).filter(s => s.id);
+    // On ne garde que les résultats dont le nom contient déjà "(lac)" — inutile de tester
+    // un par un tous les arrêts de bus environnants un par un comme avant.
+    const candidates = (data.stations || []).filter(s => s.id && /\(lac\)/i.test(s.name));
 
     if(candidates.length === 0){
-      board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Recherche "${query}" : aucun résultat renvoyé par l'API. Tapez un débarcadère manuellement ci-dessus (ex. "Ouchy").</div>`;
-      return;
+      board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Rien sous "${cityName}" — recherche par proximité géographique…</div>`;
     }
 
-    let found = null;
-    let lastDiag = null;
-    for(let i = 0; i < Math.min(candidates.length, 15); i++){
-      board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Vérification ${i+1}/${Math.min(candidates.length, 15)} : ${candidates[i].name}…</div>`;
-      const diag = await checkBoatDiagnostic(candidates[i].id);
-      lastDiag = diag;
-      if(diag.hasBoat){ found = candidates[i]; break; }
-      await new Promise(r => setTimeout(r, 400));
-    }
+    let found = candidates[0] || null;
 
     if(!found){
       // Repli : recherche par PROXIMITÉ géographique réelle (pas par nom), au cas où le
       // débarcadère n'ait pas le nom de la ville dans son propre nom (ex. juste "Ouchy").
-      board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Rien par nom de ville — recherche par proximité géographique…</div>`;
+      // Même filtre "(lac)" appliqué directement, pas de vérification passage par passage.
       const geoRes = await fetch(`${API}/locations?x=${freshCoords.lat}&y=${freshCoords.lon}&type=station`);
       const geoData = await geoRes.json();
-      const geoCandidates = (geoData.stations || []).filter(s => s.id).slice(0, 30);
-
-      for(let i = 0; i < geoCandidates.length; i++){
-        board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Recherche par proximité — ${i+1}/${geoCandidates.length} : ${geoCandidates[i].name}…</div>`;
-        const diag = await checkBoatDiagnostic(geoCandidates[i].id);
-        lastDiag = diag;
-        if(diag.hasBoat){ found = geoCandidates[i]; break; }
-        await new Promise(r => setTimeout(r, 400));
-      }
+      found = (geoData.stations || []).find(s => s.id && /\(lac\)/i.test(s.name)) || null;
     }
 
     if(!found){
-      const catsFound = lastDiag && lastDiag.cats ? [...new Set(lastDiag.cats)].join(', ') : 'aucune';
-      board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Aucun débarcadère trouvé, ni par nom de ville ni par proximité géographique. Dernières catégories vues : ${catsFound}. Tapez un débarcadère manuellement ci-dessus (ex. "Ouchy").</div>`;
+      board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Aucun débarcadère trouvé (ni par nom de ville, ni par proximité géographique) — aucun arrêt avec "(lac)" dans son nom repéré près de vous. Tapez un débarcadère manuellement ci-dessus (ex. "Ouchy").</div>`;
       return;
     }
 
