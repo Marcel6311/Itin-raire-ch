@@ -923,7 +923,7 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
     // sans pour autant cacher les autres — un filtre trop strict masquait des débarcadères
     // valides dont l'orthographe exacte ne correspondait pas à ce qu'on attendait.
     if(kind === 'boatboard'){
-      stationItems.sort((a, b) => (/\(lac\)/i.test(b.name) ? 1 : 0) - (/\(lac\)/i.test(a.name) ? 1 : 0));
+      stationItems.sort((a, b) => (/\(lac\)|\(see\)/i.test(b.name) ? 1 : 0) - (/\(lac\)|\(see\)/i.test(a.name) ? 1 : 0));
     }
     // Tri par proximité UNIQUEMENT pour la destination d'un trajet, et seulement si la requête
     // ne précise pas de ville (pas de virgule). Sur les écrans Gare et Bateau, la pertinence
@@ -995,7 +995,7 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
         // Si le nom de l'arrêt contient déjà "(lac)", c'est un vrai débarcadère garanti par
         // le filtre de la liste — pas besoin d'une deuxième vérification qui peut échouer
         // à tort si aucun passage n'a "(lac)" dans sa destination à cet instant précis.
-        const nameAlreadyConfirmed = /\(lac\)/i.test(s.name);
+        const nameAlreadyConfirmed = /\(lac\)|\(see\)/i.test(s.name);
         if(!nameAlreadyConfirmed){
           board.insertAdjacentHTML('afterbegin', `<div class="flap-loading" id="checking-boat-${s.id}" style="padding:0 20px 10px;">Vérification de "${s.name}" (id: ${s.id})…</div>`);
           const diag = await checkBoatDiagnostic(s.id);
@@ -1311,7 +1311,7 @@ async function checkBoatDiagnostic(id){
     // La catégorie seule n'est pas fiable ("B" est utilisé aussi bien pour les bus que les
     // bateaux) — le vrai signal fiable est le suffixe "(lac)" présent uniquement sur les
     // vraies destinations de navigation (ex. "Genève-Mt-Blanc (lac)").
-    const hasBoat = board.some(j => /\(lac\)/i.test(j.to || ''));
+    const hasBoat = board.some(j => /\(lac\)|\(see\)/i.test(j.to || ''));
     return { hasBoat, count: board.length, cats };
   } catch(e){
     return { hasBoat: false, count: 0, error: e.message || String(e) };
@@ -1432,7 +1432,7 @@ async function loadBoatScreen(forceRefresh){
     const data = await res.json();
     // On ne garde que les résultats dont le nom contient déjà "(lac)" — inutile de tester
     // un par un tous les arrêts de bus environnants un par un comme avant.
-    const candidates = (data.stations || []).filter(s => s.id && /\(lac\)/i.test(s.name));
+    const candidates = (data.stations || []).filter(s => s.id && /\(lac\)|\(see\)/i.test(s.name));
 
     if(candidates.length === 0){
       board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Rien sous "${cityName}" — recherche par proximité géographique…</div>`;
@@ -1446,7 +1446,7 @@ async function loadBoatScreen(forceRefresh){
       // Même filtre "(lac)" appliqué directement, pas de vérification passage par passage.
       const geoRes = await fetch(`${API}/locations?x=${freshCoords.lat}&y=${freshCoords.lon}&type=station`);
       const geoData = await geoRes.json();
-      found = (geoData.stations || []).find(s => s.id && /\(lac\)/i.test(s.name)) || null;
+      found = (geoData.stations || []).find(s => s.id && /\(lac\)|\(see\)/i.test(s.name)) || null;
     }
 
     if(!found){
@@ -1571,7 +1571,7 @@ async function refreshBoatBoard(id, name){
   try{
     const res = await fetch(`${API}/stationboard?id=${id}&limit=25`);
     const data = await res.json();
-    const boats = (data.stationboard || []).filter(j => /\(lac\)/i.test(j.to || ''));
+    const boats = (data.stationboard || []).filter(j => /\(lac\)|\(see\)/i.test(j.to || ''));
 
     if(boats.length === 0){
       slot.innerHTML = `<div class="flapboard"><div class="flap-header"><span>${name}</span><span>Temps réel</span></div><div class="flap-empty">Plus aucun bateau affiché pour l'instant.</div></div>`;
