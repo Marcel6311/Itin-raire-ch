@@ -1295,7 +1295,10 @@ async function checkBoatDiagnostic(id){
     const data = await res.json();
     const board = data.stationboard || [];
     const cats = board.map(j => j.category || '?');
-    const hasBoat = cats.some(c => BOAT_CATEGORIES.includes(c.toUpperCase()));
+    // La catégorie seule n'est pas fiable ("B" est utilisé aussi bien pour les bus que les
+    // bateaux) — le vrai signal fiable est le suffixe "(lac)" présent uniquement sur les
+    // vraies destinations de navigation (ex. "Genève-Mt-Blanc (lac)").
+    const hasBoat = board.some(j => /\(lac\)/i.test(j.to || ''));
     return { hasBoat, count: board.length, cats };
   } catch(e){
     return { hasBoat: false, count: 0, error: e.message || String(e) };
@@ -1571,7 +1574,7 @@ async function refreshBoatBoard(id, name){
   try{
     const res = await fetch(`${API}/stationboard?id=${id}&limit=25`);
     const data = await res.json();
-    const boats = (data.stationboard || []).filter(j => BOAT_CATEGORIES.includes((j.category || '').toUpperCase()));
+    const boats = (data.stationboard || []).filter(j => /\(lac\)/i.test(j.to || ''));
 
     if(boats.length === 0){
       slot.innerHTML = `<div class="flapboard"><div class="flap-header"><span>${name}</span><span>Temps réel</span></div><div class="flap-empty">Plus aucun bateau affiché pour l'instant.</div></div>`;
