@@ -1328,9 +1328,81 @@ function resetGareTime(){
   verifiedGares.forEach(g => refreshOneStationBoard(g.id, g.name, g.distance, g.coordinate));
 }
 
+async function loadBoatScreen(forceRefresh){
+  const board = document.getElementById('boat-board');
+  board.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Étape 1/3 — Localisation en cours…</div>';
+
+  if(verifiedBoatStops.length > 0 && !forceRefresh){
+    board.innerHTML = verifiedBoatStops.map(s => `<div id="boat-stop-${s.id}" style="margin-bottom:14px;"></div>`).join('');
+    refreshAllBoats();
+    stopBoatBoardRefresh();
+    boatBoardInterval = setInterval(refreshAllBoats, 45000);
+    return;
+  }
+
+  const freshCoords = userCoords || await getFreshPosition();
+  if(!freshCoords){
+    board.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Localisation impossible — vérifiez que vous avez autorisé la position pour ce site dans Safari.</div>';
+    return;
+  }
+  userCoords = freshCoords;
+
+  board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Étape 2/3 — Identification de la ville (${freshCoords.lat.toFixed(4)}, ${freshCoords.lon.toFixed(4)})…</div>`;
+  let cityName = null;
+  try{
+    const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${freshCoords.lat}&lon=${freshCoords.lon}&zoom=12&addressdetails=1&accept-language=fr`);
+    if(!geoRes.ok){
+      board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Échec à l'étape 2 — HTTP ${geoRes.status} depuis OpenStreetMap.</div>`;
+      return;
+    }
+    const geoData = await geoRes.json();
+    const addr = geoData.address || {};
+    cityName = addr.city || addr.town || addr.municipality || addr.village || null;
+    if(!cityName){
+      board.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Étape 2 réussie mais aucune ville identifiée à cette position précise.</div>';
+      return;
+    }
+  } catch(e){
+    board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur réseau à l'étape 2 : ${e.message || e}</div>`;
+    return;
+  }
+
+  // Étape 3 : nom de la ville → un débarcadère vérifié à ce nom (souvent "Ville-Ouchy" etc.,
+  // donc on vérifie plusieurs candidats, pas seulement une correspondance exacte du nom).
+  board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Étape 3/3 — Ville identifiée : ${cityName}. Recherche d'un débarcadère…</div>`;
+  try{
+    const res = await fetch(`${API}/locations?query=${encodeURIComponent(cityName)}`);
+    const data = await res.json();
+    const candidates = (data.stations || []).filter(s => s.id).slice(0, 8);
+
+    let found = null;
+    let lastDiag = null;
+    for(const c of candidates){
+      const diag = await checkBoatDiagnostic(c.id);
+      lastDiag = diag;
+      if(diag.hasBoat){ found = c; break; }
+    }
+
+    if(!found){
+      const catsFound = lastDiag && lastDiag.cats ? [...new Set(lastDiag.cats)].join(', ') : 'aucune';
+      board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Ville identifiée : ${cityName}. Aucun débarcadère détecté automatiquement parmi ${candidates.length} arrêt(s) testé(s) (${candidates.slice(0,5).map(c=>c.name).join(', ') || 'aucun'}). Dernières catégories vues : ${catsFound}. Essayez la recherche manuelle ci-dessus avec le nom exact du débarcadère.</div>`;
+      return;
+    }
+
+    if(!verifiedBoatStops.some(s => s.id === found.id)) verifiedBoatStops.push({ id: found.id, name: found.name });
+    board.innerHTML = verifiedBoatStops.map(s => `<div id="boat-stop-${s.id}" style="margin-bottom:14px;"></div>`).join('');
+    refreshAllBoats();
+    stopBoatBoardRefresh();
+    boatBoardInterval = setInterval(refreshAllBoats, 45000);
+  } catch(e){
+    board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur réseau à l'étape 3 : ${e.message || e}</div>`;
+  }
+}
+
 async function loadStationScreen(forceRefresh){
   setupAutocomplete('input-station', 'autocomplete-station', 'stationboard');
   setupAutocomplete('input-boat', 'autocomplete-boat', 'boatboard');
+  loadBoatScreen(forceRefresh);
   updateGareTimeLabel();
   const board = document.getElementById('station-board');
   board.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Étape 1/3 — Localisation en cours…</div>';
