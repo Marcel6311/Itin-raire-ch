@@ -1330,7 +1330,6 @@ function resetGareTime(){
 
 async function loadBoatScreen(forceRefresh){
   const board = document.getElementById('boat-board');
-  board.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Localisation en cours…</div>';
 
   if(verifiedBoatStops.length > 0 && !forceRefresh){
     board.innerHTML = verifiedBoatStops.map(s => `<div id="boat-stop-${s.id}" style="margin-bottom:14px;"></div>`).join('');
@@ -1340,6 +1339,7 @@ async function loadBoatScreen(forceRefresh){
     return;
   }
 
+  board.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Localisation en cours…</div>';
   const freshCoords = userCoords || await getFreshPosition();
   if(!freshCoords){
     board.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Localisation impossible — vérifiez que vous avez autorisé la position pour ce site dans Safari.</div>';
@@ -1347,31 +1347,52 @@ async function loadBoatScreen(forceRefresh){
   }
   userCoords = freshCoords;
 
-  // Recherche par PROXIMITÉ RÉELLE (pas par nom) : on prend les arrêts les plus proches de vous,
-  // quel que soit leur nom (un débarcadère peut s'appeler "Ouchy" sans le nom de la ville devant),
-  // et on vérifie chacun jusqu'à trouver un vrai bateau.
-  board.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Recherche des arrêts proches (vérification en cours)…</div>';
+  // Même mécanisme que pour les gares : position → nom de ville (OpenStreetMap Nominatim)
+  board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Identification de la ville (${freshCoords.lat.toFixed(4)}, ${freshCoords.lon.toFixed(4)})…</div>`;
+  let cityName = null;
   try{
-    const res = await fetch(`${API}/locations?x=${freshCoords.lat}&y=${freshCoords.lon}&type=station`);
+    const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${freshCoords.lat}&lon=${freshCoords.lon}&zoom=12&addressdetails=1&accept-language=fr`);
+    if(!geoRes.ok){
+      board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Échec — HTTP ${geoRes.status} depuis OpenStreetMap. Tapez un débarcadère manuellement ci-dessus.</div>`;
+      return;
+    }
+    const geoData = await geoRes.json();
+    const addr = geoData.address || {};
+    cityName = addr.city || addr.town || addr.municipality || addr.village || null;
+    if(!cityName){
+      board.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Aucune ville identifiée à cette position précise. Tapez un débarcadère manuellement ci-dessus.</div>';
+      return;
+    }
+  } catch(e){
+    board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur réseau : ${e.message || e}. Tapez un débarcadère manuellement ci-dessus.</div>`;
+    return;
+  }
+
+  // Nom de ville + "débarcadère" comme nouvelle requête directe, comme demandé
+  const query = `${cityName} débarcadère`;
+  board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Ville identifiée : ${cityName}. Recherche : "${query}"…</div>`;
+  try{
+    const res = await fetch(`${API}/locations?query=${encodeURIComponent(query)}`);
     const data = await res.json();
-    const candidates = (data.stations || []).filter(s => s.id).slice(0, 40);
+    const candidates = (data.stations || []).filter(s => s.id);
+
+    if(candidates.length === 0){
+      board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Recherche "${query}" : aucun résultat renvoyé par l'API. Tapez un débarcadère manuellement ci-dessus (ex. "Ouchy").</div>`;
+      return;
+    }
 
     let found = null;
     let lastDiag = null;
-    for(let i = 0; i < candidates.length; i++){
-      board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Vérification ${i+1}/${candidates.length} : ${candidates[i].name}…</div>`;
-      const diag = await checkBoatDiagnostic(candidates[i].id);
+    for(const c of candidates.slice(0, 5)){
+      const diag = await checkBoatDiagnostic(c.id);
       lastDiag = diag;
-      if(diag.hasBoat){ found = candidates[i]; break; }
-      // Pause de 400 ms entre chaque appel — l'API limite à 3 requêtes/seconde par IP,
-      // sans cette pause les vérifications au-delà des 9 premières échouaient silencieusement.
+      if(diag.hasBoat){ found = c; break; }
       await new Promise(r => setTimeout(r, 400));
     }
 
     if(!found){
       const catsFound = lastDiag && lastDiag.cats ? [...new Set(lastDiag.cats)].join(', ') : 'aucune';
-      const errNote = lastDiag && lastDiag.error ? ` (dernière erreur réseau rencontrée : ${lastDiag.error})` : '';
-      board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Aucun débarcadère détecté automatiquement parmi les ${candidates.length} arrêts les plus proches de vous. Dernières catégories vues : ${catsFound}${errNote}. Essayez la recherche manuelle ci-dessus avec le nom exact du débarcadère (ex. "Ouchy").</div>`;
+      board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Recherche "${query}" : ${candidates.length} résultat(s) trouvé(s) (${candidates.slice(0,5).map(c=>c.name).join(', ')}), mais aucun vérifié comme bateau — dernières catégories vues : ${catsFound}. Tapez un débarcadère manuellement ci-dessus (ex. "Ouchy").</div>`;
       return;
     }
 
@@ -1381,7 +1402,7 @@ async function loadBoatScreen(forceRefresh){
     stopBoatBoardRefresh();
     boatBoardInterval = setInterval(refreshAllBoats, 45000);
   } catch(e){
-    board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur réseau à l'étape 3 : ${e.message || e}</div>`;
+    board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur réseau : ${e.message || e}. Tapez un débarcadère manuellement ci-dessus.</div>`;
   }
 }
 
