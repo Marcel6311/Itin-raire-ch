@@ -1358,31 +1358,45 @@ function resetGareTime(){
 }
 
 async function loadBoatScreen(forceRefresh){
-  setupAutocomplete('input-boat', 'autocomplete-boat', 'boatboard');
-
-  // Affiche la liste des débarcadères connus dès qu'on touche le champ, même vide,
-  // pour éviter d'avoir à deviner le bon nom.
+  // Le champ bateau n'utilise plus la recherche API en direct pour les suggestions —
+  // il filtre en local, lettre par lettre, dans la liste des 201 débarcadères officiels
+  // garantis exacts. Bien plus fiable qu'une recherche floue côté serveur.
   const boatInput = document.getElementById('input-boat');
   const boatBox = document.getElementById('autocomplete-boat');
-  boatInput.addEventListener('focus', () => {
-    if(boatInput.value.trim().length > 0) return; // laisse l'autocomplétion normale gérer si déjà tapé
-    boatBox.innerHTML = KNOWN_BOAT_STOPS.map((name, i) =>
+
+  function renderKnownBoatMatches(){
+    const q = boatInput.value.trim().toLowerCase();
+    const matches = q.length === 0
+      ? KNOWN_BOAT_STOPS
+      : KNOWN_BOAT_STOPS.filter(name => name.toLowerCase().includes(q));
+
+    if(matches.length === 0){
+      boatBox.innerHTML = `<div class="ac-hint">Aucun débarcadère connu ne correspond — vérifie l'orthographe.</div>`;
+      boatBox.classList.add('show');
+      return;
+    }
+
+    boatBox.innerHTML = matches.map((name, i) =>
       `<div class="ac-item" data-known-idx="${i}"><span>⚓ ${name}</span></div>`
     ).join('');
     boatBox.classList.add('show');
     boatBox.querySelectorAll('[data-known-idx]').forEach(el => {
       el.addEventListener('mousedown', () => {
-        const name = KNOWN_BOAT_STOPS[parseInt(el.dataset.knownIdx)];
-        // On ne cherche que le premier mot (la ville) plutôt que le nom complet précis
-        // ("Genève, Mt-Blanc" → "Genève") : les vraies données peuvent être formatées
-        // différemment ("Genève-Mont-Blanc") et une recherche exacte ratait le résultat.
-        const searchTerm = name.replace(/[,-]/g, ' ').replace(/\s{2,}/g, ' ').trim();
-        boatInput.value = searchTerm;
+        const name = matches[parseInt(el.dataset.knownIdx)];
+        // On ne cherche que les mots (sans ponctuation) plutôt que le nom complet précis :
+        // les vraies données peuvent être formatées différemment et une recherche exacte
+        // avec ponctuation peut rater le résultat.
+        const searchTerm = name.replace(/[,()\/]/g, ' ').replace(/\s{2,}/g, ' ').trim();
+        boatInput.value = name;
         boatBox.classList.remove('show');
         fetchAutocomplete(searchTerm, 'autocomplete-boat', 'input-boat', 'boatboard');
       });
     });
-  });
+  }
+
+  boatInput.addEventListener('focus', renderKnownBoatMatches);
+  boatInput.addEventListener('input', renderKnownBoatMatches);
+  boatInput.addEventListener('blur', () => setTimeout(() => boatBox.classList.remove('show'), 200));
 
   const board = document.getElementById('boat-board');
 
