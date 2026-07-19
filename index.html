@@ -2007,14 +2007,61 @@ let visitMode = 'destination'; // 'destination' ou 'position'
 
 // Stades des clubs de Super League / Challenge League suisses (approximatif, à vérifier
 // périodiquement car les clubs peuvent changer de division d'une saison à l'autre)
-// Liste des débarcadères suisses les plus fréquentés, pour les proposer directement
-// dans le champ de recherche sans que l'utilisateur ait à deviner le bon nom.
+// Liste COMPLÈTE et OFFICIELLE des 201 débarcadères suisses (source : OFT/BAV, données
+// exactes obtenues via l'API officielle data.oev-info.ch, filtrées par moyen_de_transport=BOAT).
+// Fini les suppositions : ce sont les vrais noms exacts utilisés dans les données de transport.
 const KNOWN_BOAT_STOPS = [
-  'Lausanne-Ouchy', 'Genève, Mt-Blanc', 'Genève, Jardin Anglais', 'Montreux', 'Vevey',
-  'Nyon', 'Morges', 'Rolle', 'Thonon', 'Évian', 'Yvoire', 'Lutry', 'Cully', 'St-Saphorin',
-  'Villeneuve VD', 'Chillon', 'Zürich, Bürkliplatz', 'Rapperswil SG', 'Luzern',
-  'Weggis', 'Vitznau', 'Interlaken West', 'Thun', 'Brienz', 'Neuchâtel', 'Bienne/Biel',
-  'Estavayer-le-Lac', 'Basel, Schifflände', 'Rheinfelden', 'Locarno', 'Ascona'
+  'Aesch LU (See)', 'Alpnachstad (See)', 'Altendorf Seestatt', 'Altenrhein Schifflände',
+  'Altnau (See)', 'Altreu', 'Anières (lac)', 'Arbon (See)',
+  'Arth am See (Schiff)', 'Ascona (lago)', 'Augst BL Kraftwerk', 'Auvernier (bateau)',
+  'Avenches Plage', 'Basel Rheinhafen/Dreiländereck', 'Beatushöhlen-Sundlauenen', 'Beckenried (See)',
+  'Beckenried Niederdorf (Fähre)', 'Beinwil am See (See)', 'Bellevue GE Port Gitana', 'Berlingen (See)',
+  'Betlis', 'Biel/Bienne (Schiff/bateau)', 'Bissone (lago)', 'Bouveret (lac)',
+  'Brissago (lago)', 'Brusino Arsizio (lago)', 'Brusino Arsizio Funivia (lago)', 'Brügg (Schiff)',
+  'Buchberg (Fähre)', 'Buochs (See)', 'Buonas (See)', 'Bönigen',
+  'Büren (Schiff)', 'Büsingen (Schifflände)', 'Castagnola Heleneum (lago)', 'Cham (See)',
+  'Chastè', 'Chevroux', 'Château-de-Chillon (lac)', 'Clarens (lac)',
+  'Concise (bateau)', 'Coppet (lac)', 'Cortaillod (bateau)', 'Cully (lac)',
+  'Eierhals (See)', 'Einigen (See)', 'Ellikon am Rhein', 'Engelberg-Wingreis',
+  'Ennetbürgen (See)', 'Erlenbach ZH (See)', 'Faulensee (See)', 'Flüelen (See)',
+  'Fällanden (See)', 'Gandria Confine (lago)', 'Genève-Molard (lac)', 'Genève-Mt-Blanc (lac)',
+  'Genève-Port Noir (lac)', 'Genève-Pâquis (lac)', 'Genève-Quai Gustave Ador (lac)', 'Gerra (Gambarogno) (lago)',
+  'Gersau (See)', 'Gersau Förstli (Fähre)', 'Giswil Zollhaus', 'Gorgier-Chez-le-Bart',
+  'Grandson (bateau)', 'Greifensee (See)', 'Grenchen (Schiff)', 'Greppen',
+  'Grotto Elvezia (lago)', 'Halbinsel Au', 'Hauterive NE débarcadère', 'Hergiswil (See)',
+  'Hermance (lac)', 'Hermitage', 'Herrliberg (See)', 'Horgen (See)',
+  'Horgen Autoquai', 'Insel Ufenau', 'Interlaken Ost (See)', 'Interlaken West (See)',
+  'Isola (See)', 'Isole di Brissago', 'Kaiseraugst Schifflände', 'Kehrsiten Dorf',
+  'Kilchberg ZH (See)', 'Küsnacht ZH (See)', 'Küsnacht ZH Heslibach', 'Küssnacht am Rigi (See)',
+  'La Belotte (lac)', 'La Neuveville (bateau)', 'La Sauge (bateau)', 'La Tène',
+  'Lachen SZ (See)', 'Lausanne-Ouchy (lac)', 'Le Lieu Roche Fendue (lac)', 'Le Pont (lac)',
+  'Le Rocheray (lac)', 'Les Brenets (Lac)', 'Ligerz (Schiff)', 'Locarno (lago)',
+  'Lutry (lac)', 'Lüscherz BSG', 'Mammern (See)', 'Mannenbach (See)',
+  'Maroggia (lago)', 'Maur (See)', 'Meggen (See)', 'Meilen (See)',
+  'Meilen Autoquai', 'Meisterschwanden Delphin', 'Meisterschwanden Seerose', 'Melano (lago)',
+  'Melide Swissminiatur (lago)', 'Merligen (See)', 'Morcote (lago)', 'Morgarten Denkmal (See)',
+  'Morges (lac)', 'Mosen (See)', 'Murg Ost (See)', 'Museo doganale svizzero (lago)',
+  'Mönchaltorf (See)', 'Neuchâtel (bateau)', 'Neuchâtel-Serrières (bateau)', 'Neuhaus (Unterseen) (See)',
+  'Nidau (Schiff)', 'Niederried (See)', 'Nyon (lac)', 'Oberried am Brienzersee (See)',
+  'Oberrieden (See)', 'Oberägeri (See)', 'Oberägeri Ländli (See)', 'Paradiso (lago)',
+  'Pfäffikon SZ (See)', 'Port', 'Portalban', 'Praz',
+  'Quinten', 'Quinten Au', 'Rekingen AG Quai', 'Rheinau Kraftwerk',
+  'Rheinfelden Schifflände', 'Rheinsfelden', 'Richterswil (See)', 'Risch (See)',
+  'Rolle (lac)', 'Romanshorn Autoquai', 'Rorschach Hafen (See)', 'Rotschuo',
+  'Rüdlingen (Schiffstation)', 'Saut-du-Doubs', 'Schadau', 'Schlatt Paradies (Fähre)',
+  'Seeburg', 'Sils/Segl Maria Barchiröls', 'Sisikon (See)', 'Solothurn (Schiff)',
+  'Spiez Schiffstation', 'St-Aubin NE (bateau)', 'St-Blaise (bateau)', 'St-Prex (lac)',
+  'St-Sulpice VD (lac)', 'St. Niklausen LU (See)', 'St. Petersinsel Nord', 'St. Petersinsel Süd',
+  'Stansstad (See)', 'Stein am Rhein (Schifflände)', 'Stäfa (See)', 'Sugiez (bateau)',
+  'Tenero (lago)', 'Territet (lac)', 'Thalwil (See)', 'Treib',
+  'Tribschen', 'Trois-Lacs (camping)', 'Twann (Schiff)', 'Tössegg',
+  'Tüscherz (Schiff)', 'Unterterzen (See)', 'Uster (See)', 'Vallamand',
+  'Vaumarcus débarcadère', 'Verkehrshaus-Lido', 'Versoix (lac)', 'Vevey-Marché (lac)',
+  'Villeneuve VD (lac)', 'Vira (Gambarogno) (lago)', 'Walchwil (See)', 'Walenstadt (See)',
+  'Weesen (See)', 'Wilen Waldheim', 'Wädenswil (See)', 'Yverdon-les-Bains (bateau)',
+  'Zollikon (See)', 'Zug Bahnhofsteg (See)', 'Zug Landsgemeindeplatz (See)', 'Zürich Bürkliplatz (See)',
+  'Zürich Landesmuseum (See)', 'Zürich Storchen', 'Zürich Tiefenbrunnen (See)', 'Zürich Wollishofen (See)',
+  'Zürichhorn (See)'
 ];
 
 const SWISS_STADIUMS = [
