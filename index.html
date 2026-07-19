@@ -1369,7 +1369,7 @@ async function loadBoatScreen(forceRefresh){
   }
 
   // Nom de ville + "débarcadère" comme nouvelle requête directe, comme demandé
-  const query = `${cityName} débarcadère`;
+  const query = `débarcadère ${cityName}`;
   board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Ville identifiée : ${cityName}. Recherche : "${query}"…</div>`;
   try{
     const res = await fetch(`${API}/locations?query=${encodeURIComponent(query)}`);
