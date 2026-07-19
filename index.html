@@ -990,17 +990,23 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
 
       if(kind === 'boatboard'){
         const board = document.getElementById('boat-board');
-        board.insertAdjacentHTML('afterbegin', `<div class="flap-loading" id="checking-boat-${s.id}" style="padding:0 20px 10px;">Vérification de "${s.name}" (id: ${s.id})…</div>`);
-        const diag = await checkBoatDiagnostic(s.id);
-        document.getElementById('checking-boat-' + s.id)?.remove();
-        if(!diag.hasBoat){
-          const detail = diag.error
-            ? `Erreur réseau : ${diag.error}`
-            : diag.count === 0
-              ? `0 passage renvoyé par l'API pour cet identifiant (${s.id}).`
-              : `${diag.count} passages trouvés, mais aucun repéré comme bateau — catégories reçues : ${[...new Set(diag.cats)].join(', ')}. Dis-moi ces catégories, je pourrai corriger la détection précisément.`;
-          showToast(`"${s.name}" — ${detail}`, 9000);
-          return;
+        // Si le nom de l'arrêt contient déjà "(lac)", c'est un vrai débarcadère garanti par
+        // le filtre de la liste — pas besoin d'une deuxième vérification qui peut échouer
+        // à tort si aucun passage n'a "(lac)" dans sa destination à cet instant précis.
+        const nameAlreadyConfirmed = /\(lac\)/i.test(s.name);
+        if(!nameAlreadyConfirmed){
+          board.insertAdjacentHTML('afterbegin', `<div class="flap-loading" id="checking-boat-${s.id}" style="padding:0 20px 10px;">Vérification de "${s.name}" (id: ${s.id})…</div>`);
+          const diag = await checkBoatDiagnostic(s.id);
+          document.getElementById('checking-boat-' + s.id)?.remove();
+          if(!diag.hasBoat){
+            const detail = diag.error
+              ? `Erreur réseau : ${diag.error}`
+              : diag.count === 0
+                ? `0 passage renvoyé par l'API pour cet identifiant (${s.id}).`
+                : `${diag.count} passages trouvés, mais aucun repéré comme bateau — catégories reçues : ${[...new Set(diag.cats)].join(', ')}. Dis-moi ces catégories, je pourrai corriger la détection précisément.`;
+            showToast(`"${s.name}" — ${detail}`, 9000);
+            return;
+          }
         }
         if(!verifiedBoatStops.some(g => g.id === s.id)){
           verifiedBoatStops.push({ id: s.id, name: s.name });
