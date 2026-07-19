@@ -83,6 +83,10 @@
     border-radius:12px; margin-top:4px; box-shadow:0 10px 26px rgba(0,0,0,.12); z-index:60; max-height:220px; overflow-y:auto; display:none;
   }
   .autocomplete.show{ display:block; }
+  /* Liste bateau : bloc normal de page (pas un menu flottant), pour un défilement tactile fiable */
+  #autocomplete-boat{
+    position:static; margin-top:6px; max-height:50vh; -webkit-overflow-scrolling:touch;
+  }
   .ac-item{ padding:11px 14px; font-size:14px; border-bottom:1px solid var(--line); cursor:pointer; display:flex; align-items:center; gap:8px; }
   .ac-hint{ padding:9px 14px; font-size:11.5px; color:var(--ink-soft); background:var(--lake-dim); line-height:1.4; }
   .ac-item:last-child{ border-bottom:none; }
@@ -1410,18 +1414,9 @@ async function loadBoatScreen(forceRefresh){
 
   boatInput.addEventListener('focus', renderKnownBoatMatches);
   boatInput.addEventListener('input', renderKnownBoatMatches);
-  // La liste ne se ferme plus jamais toute seule pendant qu'on la fait défiler — seulement
-  // quand on touche une destination (déjà géré ci-dessus) ou qu'on touche ailleurs sur l'écran.
-  if(!window._boatOutsideClickBound){
-    window._boatOutsideClickBound = true;
-    document.addEventListener('click', (e) => {
-      const inputEl = document.getElementById('input-boat');
-      const boxEl = document.getElementById('autocomplete-boat');
-      if(inputEl && boxEl && !inputEl.contains(e.target) && !boxEl.contains(e.target)){
-        boxEl.classList.remove('show');
-      }
-    });
-  }
+  // Aucune fermeture automatique de la liste : ni au défilement, ni à la perte de focus,
+  // ni au clic ailleurs. Elle ne se ferme QUE quand une destination est sélectionnée
+  // (géré directement dans selectThisStop ci-dessus).
 
   const board = document.getElementById('boat-board');
 
