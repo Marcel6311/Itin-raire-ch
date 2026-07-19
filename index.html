@@ -1851,12 +1851,71 @@ async function loadVisitScreen(mode){
     <p class="value-note" style="margin-top:10px;">Sites et lieux référencés sur Wikipedia à proximité, triés par distance.</p>
     <div id="around-attractions-list"><div class="flap-loading" style="padding:0 20px;">Recherche des sites à proximité…</div></div>
 
+    <p class="section-label" style="margin-top:24px;">🗿 Monuments (2 km)</p>
+    <p class="value-note">Source : Google Places — monuments, sites historiques et œuvres commémoratives.</p>
+    <div id="monuments-list"><div class="flap-loading" style="padding:0 20px;">Recherche des monuments à proximité…</div></div>
+
     <p class="section-label" style="margin-top:24px;">🎫 Événements dans les attractions officielles (2 km)</p>
     <p class="value-note">Source : Suisse Tourisme — couvre uniquement les événements liés à des attractions officiellement référencées (musées, sites), pas les concerts ou manifestations indépendantes.</p>
     <div id="official-events-list"><div class="flap-loading" style="padding:0 20px;">Recherche des événements officiels…</div></div>
   `;
   loadAttractions(lat, lon);
+  loadMonuments(lat, lon);
   loadOfficialEvents(lat, lon);
+}
+
+async function loadMonuments(lat, lon){
+  const list = document.getElementById('monuments-list');
+  try{
+    const res = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.rating,places.userRatingCount,places.location'
+      },
+      body: JSON.stringify({
+        includedTypes: ['monument', 'historical_place'],
+        maxResultCount: 16,
+        rankPreference: 'DISTANCE',
+        locationRestriction: { circle: { center: { latitude: lat, longitude: lon }, radius: 2000.0 } }
+      })
+    });
+    const data = await res.json();
+    if(data.error){
+      list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur Google Places : ${data.error.message || 'raison inconnue'} (code ${data.error.status || res.status}).</div>`;
+      return;
+    }
+    const monuments = (data.places || []).map(p => ({
+      id: p.id,
+      name: p.displayName ? p.displayName.text : 'Monument',
+      rating: p.rating || null,
+      ratingCount: p.userRatingCount || 0,
+      distance: Math.round(haversineMeters(lat, lon, p.location.latitude, p.location.longitude))
+    })).sort((a,b) => a.distance - b.distance);
+
+    bumpUsage('usage_places_calls');
+
+    if(monuments.length === 0){
+      list.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Aucun monument référencé dans un rayon de 2 km.</div>';
+      return;
+    }
+
+    list.innerHTML = monuments.map(m => `
+      <div class="place-card" onclick="openPlaceDetail('${m.id}')" style="cursor:pointer;">
+        <div class="place-thumb" style="background:var(--coral-dim);">🗿</div>
+        <div class="place-info">
+          <div class="place-name">${m.name}</div>
+          <div class="place-meta">
+            ${m.rating ? `<span class="rating">★ ${m.rating}</span><span class="dot-sep"></span><span class="meta-txt">${m.ratingCount} avis</span>` : '<span class="meta-txt">Pas encore noté</span>'}
+          </div>
+          <div class="meta-txt" style="margin-top:3px;">${m.distance} m · toucher pour en savoir plus</div>
+        </div>
+      </div>
+    `).join('');
+  } catch(e){
+    list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Impossible de charger les monuments : ${e.message || e}.</div>`;
+  }
 }
 
 async function loadOfficialEvents(lat, lon){
