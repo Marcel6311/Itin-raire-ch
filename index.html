@@ -918,11 +918,12 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
     const res = await fetch(`${API}/locations?query=${encodeURIComponent(cleanedQuery)}`);
     const data = await res.json();
     stationItems = (data.stations || []).filter(s => s.id);
-    // Tri par proximité UNIQUEMENT quand la requête ne précise pas de ville (pas de virgule) :
-    // si l'adresse collée contient déjà la ville, on respecte la pertinence de l'API — sinon
-    // une rue homonyme proche de vous pourrait passer devant la bonne adresse.
+    // Tri par proximité UNIQUEMENT pour la destination d'un trajet, et seulement si la requête
+    // ne précise pas de ville (pas de virgule). Sur les écrans Gare et Bateau, la pertinence
+    // du nom doit toujours primer — sinon un résultat proche mais non pertinent (ex.
+    // "Lausanne-Genève") passe devant la vraie gare "Genève" cherchée.
     const hasExplicitCity = cleanedQuery.includes(',');
-    if(userCoords && !hasExplicitCity){
+    if(userCoords && !hasExplicitCity && kind === 'destination'){
       stationItems.sort((a, b) => {
         const da = a.coordinate ? haversineMeters(userCoords.lat, userCoords.lon, a.coordinate.x, a.coordinate.y) : Infinity;
         const db = b.coordinate ? haversineMeters(userCoords.lat, userCoords.lon, b.coordinate.x, b.coordinate.y) : Infinity;
