@@ -913,9 +913,14 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
   // sans toucher à ce qui est affiché dans le champ.
   const cleanedQuery = q.replace(/\b\d{4}\b\s*/g, '').replace(/\s{2,}/g, ' ').replace(/\s,/g, ',').trim();
 
+  // Sur le champ bateau, on ajoute directement "lac" à la recherche envoyée à l'API — sans
+  // ça, taper juste "Ouchy" peut ne pas remonter la bonne entrée si le nom officiel est
+  // formulé différemment. Ce qui est affiché dans le champ, lui, ne change pas.
+  const apiQuery = (kind === 'boatboard' && !/lac/i.test(cleanedQuery)) ? `${cleanedQuery} lac` : cleanedQuery;
+
   let stationItems = [];
   try{
-    const res = await fetch(`${API}/locations?query=${encodeURIComponent(cleanedQuery)}`);
+    const res = await fetch(`${API}/locations?query=${encodeURIComponent(apiQuery)}`);
     const data = await res.json();
     stationItems = (data.stations || []).filter(s => s.id);
     // Sur le champ bateau, on ne propose que les vrais débarcadères (qui ont eux-mêmes
