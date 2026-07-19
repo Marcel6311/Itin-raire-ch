@@ -1368,7 +1368,7 @@ async function loadBoatScreen(forceRefresh){
         // On ne cherche que le premier mot (la ville) plutôt que le nom complet précis
         // ("Genève, Mt-Blanc" → "Genève") : les vraies données peuvent être formatées
         // différemment ("Genève-Mont-Blanc") et une recherche exacte ratait le résultat.
-        const searchTerm = name.split(/[,-]/)[0].trim();
+        const searchTerm = name.replace(/[,-]/g, ' ').replace(/\s{2,}/g, ' ').trim();
         boatInput.value = searchTerm;
         boatBox.classList.remove('show');
         fetchAutocomplete(searchTerm, 'autocomplete-boat', 'input-boat', 'boatboard');
