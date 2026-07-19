@@ -1356,16 +1356,20 @@ async function loadBoatScreen(forceRefresh){
     boatBox.querySelectorAll('[data-known-idx]').forEach(el => {
       el.addEventListener('mousedown', () => {
         const name = KNOWN_BOAT_STOPS[parseInt(el.dataset.knownIdx)];
-        boatInput.value = name;
+        // On ne cherche que le premier mot (la ville) plutôt que le nom complet précis
+        // ("Genève, Mt-Blanc" → "Genève") : les vraies données peuvent être formatées
+        // différemment ("Genève-Mont-Blanc") et une recherche exacte ratait le résultat.
+        const searchTerm = name.split(/[,-]/)[0].trim();
+        boatInput.value = searchTerm;
         boatBox.classList.remove('show');
-        fetchAutocomplete(name, 'autocomplete-boat', 'input-boat', 'boatboard');
+        fetchAutocomplete(searchTerm, 'autocomplete-boat', 'input-boat', 'boatboard');
       });
     });
   });
 
   const board = document.getElementById('boat-board');
 
-  if(verifiedBoatStops.length > 0 && !forceRefresh){
+  if(verifiedBoatStops.length > 0){
     board.innerHTML = verifiedBoatStops.map(s => `<div id="boat-stop-${s.id}" style="margin-bottom:14px;"></div>`).join('');
     refreshAllBoats();
     stopBoatBoardRefresh();
