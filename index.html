@@ -1373,19 +1373,24 @@ async function loadBoatScreen(forceRefresh){
   try{
     const res = await fetch(`${API}/locations?query=${encodeURIComponent(cityName)}`);
     const data = await res.json();
-    const candidates = (data.stations || []).filter(s => s.id).slice(0, 8);
+    let candidates = (data.stations || []).filter(s => s.id).slice(0, 25);
+    // On teste en priorité les noms évoquant clairement un débarcadère (Ouchy, port, débarcadère...),
+    // avant de balayer le reste dans l'ordre — ça trouve le bon arrêt bien plus vite dans la plupart des cas.
+    const hint = /ouchy|port|débarcadère|debarcadere|quai|embarcadère/i;
+    candidates.sort((a, b) => (hint.test(b.name) ? 1 : 0) - (hint.test(a.name) ? 1 : 0));
 
     let found = null;
     let lastDiag = null;
-    for(const c of candidates){
-      const diag = await checkBoatDiagnostic(c.id);
+    for(let i = 0; i < candidates.length; i++){
+      board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Étape 3/3 — Vérification ${i+1}/${candidates.length} : ${candidates[i].name}…</div>`;
+      const diag = await checkBoatDiagnostic(candidates[i].id);
       lastDiag = diag;
-      if(diag.hasBoat){ found = c; break; }
+      if(diag.hasBoat){ found = candidates[i]; break; }
     }
 
     if(!found){
       const catsFound = lastDiag && lastDiag.cats ? [...new Set(lastDiag.cats)].join(', ') : 'aucune';
-      board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Ville identifiée : ${cityName}. Aucun débarcadère détecté automatiquement parmi ${candidates.length} arrêt(s) testé(s) (${candidates.slice(0,5).map(c=>c.name).join(', ') || 'aucun'}). Dernières catégories vues : ${catsFound}. Essayez la recherche manuelle ci-dessus avec le nom exact du débarcadère.</div>`;
+      board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Ville identifiée : ${cityName}. Aucun débarcadère détecté automatiquement parmi ${candidates.length} arrêt(s) testé(s). Dernières catégories vues : ${catsFound}. Essayez la recherche manuelle ci-dessus avec le nom exact du débarcadère (ex. "Ouchy").</div>`;
       return;
     }
 
