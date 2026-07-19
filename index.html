@@ -1342,6 +1342,27 @@ function resetGareTime(){
 
 async function loadBoatScreen(forceRefresh){
   setupAutocomplete('input-boat', 'autocomplete-boat', 'boatboard');
+
+  // Affiche la liste des débarcadères connus dès qu'on touche le champ, même vide,
+  // pour éviter d'avoir à deviner le bon nom.
+  const boatInput = document.getElementById('input-boat');
+  const boatBox = document.getElementById('autocomplete-boat');
+  boatInput.addEventListener('focus', () => {
+    if(boatInput.value.trim().length > 0) return; // laisse l'autocomplétion normale gérer si déjà tapé
+    boatBox.innerHTML = KNOWN_BOAT_STOPS.map((name, i) =>
+      `<div class="ac-item" data-known-idx="${i}"><span>⚓ ${name}</span></div>`
+    ).join('');
+    boatBox.classList.add('show');
+    boatBox.querySelectorAll('[data-known-idx]').forEach(el => {
+      el.addEventListener('mousedown', () => {
+        const name = KNOWN_BOAT_STOPS[parseInt(el.dataset.knownIdx)];
+        boatInput.value = name;
+        boatBox.classList.remove('show');
+        fetchAutocomplete(name, 'autocomplete-boat', 'input-boat', 'boatboard');
+      });
+    });
+  });
+
   const board = document.getElementById('boat-board');
 
   if(verifiedBoatStops.length > 0 && !forceRefresh){
@@ -1981,6 +2002,16 @@ let visitMode = 'destination'; // 'destination' ou 'position'
 
 // Stades des clubs de Super League / Challenge League suisses (approximatif, à vérifier
 // périodiquement car les clubs peuvent changer de division d'une saison à l'autre)
+// Liste des débarcadères suisses les plus fréquentés, pour les proposer directement
+// dans le champ de recherche sans que l'utilisateur ait à deviner le bon nom.
+const KNOWN_BOAT_STOPS = [
+  'Lausanne-Ouchy', 'Genève, Mt-Blanc', 'Genève, Jardin Anglais', 'Montreux', 'Vevey',
+  'Nyon', 'Morges', 'Rolle', 'Thonon', 'Évian', 'Yvoire', 'Lutry', 'Cully', 'St-Saphorin',
+  'Villeneuve VD', 'Chillon', 'Zürich, Bürkliplatz', 'Rapperswil SG', 'Luzern',
+  'Weggis', 'Vitznau', 'Interlaken West', 'Thun', 'Brienz', 'Neuchâtel', 'Bienne/Biel',
+  'Estavayer-le-Lac', 'Basel, Schifflände', 'Rheinfelden', 'Locarno', 'Ascona'
+];
+
 const SWISS_STADIUMS = [
   { club: 'Lausanne-Sport', name: 'de la Tuilière', lat: 46.5563, lon: 6.6178 },
   { club: 'Young Boys', name: 'Wankdorf', lat: 46.9631, lon: 7.4644 },
