@@ -1363,11 +1363,15 @@ async function loadBoatScreen(forceRefresh){
       const diag = await checkBoatDiagnostic(candidates[i].id);
       lastDiag = diag;
       if(diag.hasBoat){ found = candidates[i]; break; }
+      // Pause de 400 ms entre chaque appel — l'API limite à 3 requêtes/seconde par IP,
+      // sans cette pause les vérifications au-delà des 9 premières échouaient silencieusement.
+      await new Promise(r => setTimeout(r, 400));
     }
 
     if(!found){
       const catsFound = lastDiag && lastDiag.cats ? [...new Set(lastDiag.cats)].join(', ') : 'aucune';
-      board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Aucun débarcadère détecté automatiquement parmi les ${candidates.length} arrêts les plus proches de vous. Dernières catégories vues : ${catsFound}. Essayez la recherche manuelle ci-dessus avec le nom exact du débarcadère (ex. "Ouchy").</div>`;
+      const errNote = lastDiag && lastDiag.error ? ` (dernière erreur réseau rencontrée : ${lastDiag.error})` : '';
+      board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Aucun débarcadère détecté automatiquement parmi les ${candidates.length} arrêts les plus proches de vous. Dernières catégories vues : ${catsFound}${errNote}. Essayez la recherche manuelle ci-dessus avec le nom exact du débarcadère (ex. "Ouchy").</div>`;
       return;
     }
 
