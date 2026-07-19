@@ -1410,7 +1410,18 @@ async function loadBoatScreen(forceRefresh){
 
   boatInput.addEventListener('focus', renderKnownBoatMatches);
   boatInput.addEventListener('input', renderKnownBoatMatches);
-  boatInput.addEventListener('blur', () => setTimeout(() => boatBox.classList.remove('show'), 600));
+  // La liste ne se ferme plus jamais toute seule pendant qu'on la fait défiler — seulement
+  // quand on touche une destination (déjà géré ci-dessus) ou qu'on touche ailleurs sur l'écran.
+  if(!window._boatOutsideClickBound){
+    window._boatOutsideClickBound = true;
+    document.addEventListener('click', (e) => {
+      const inputEl = document.getElementById('input-boat');
+      const boxEl = document.getElementById('autocomplete-boat');
+      if(inputEl && boxEl && !inputEl.contains(e.target) && !boxEl.contains(e.target)){
+        boxEl.classList.remove('show');
+      }
+    });
+  }
 
   const board = document.getElementById('boat-board');
 
