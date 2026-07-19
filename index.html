@@ -1330,7 +1330,7 @@ function resetGareTime(){
 
 async function loadBoatScreen(forceRefresh){
   const board = document.getElementById('boat-board');
-  board.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Étape 1/3 — Localisation en cours…</div>';
+  board.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Localisation en cours…</div>';
 
   if(verifiedBoatStops.length > 0 && !forceRefresh){
     board.innerHTML = verifiedBoatStops.map(s => `<div id="boat-stop-${s.id}" style="margin-bottom:14px;"></div>`).join('');
@@ -1347,42 +1347,19 @@ async function loadBoatScreen(forceRefresh){
   }
   userCoords = freshCoords;
 
-  board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Étape 2/3 — Identification de la ville (${freshCoords.lat.toFixed(4)}, ${freshCoords.lon.toFixed(4)})…</div>`;
-  let cityName = null;
+  // Recherche par PROXIMITÉ RÉELLE (pas par nom) : on prend les arrêts les plus proches de vous,
+  // quel que soit leur nom (un débarcadère peut s'appeler "Ouchy" sans le nom de la ville devant),
+  // et on vérifie chacun jusqu'à trouver un vrai bateau.
+  board.innerHTML = '<div class="flap-loading" style="padding:0 20px;">Recherche des arrêts proches (vérification en cours)…</div>';
   try{
-    const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${freshCoords.lat}&lon=${freshCoords.lon}&zoom=12&addressdetails=1&accept-language=fr`);
-    if(!geoRes.ok){
-      board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Échec à l'étape 2 — HTTP ${geoRes.status} depuis OpenStreetMap.</div>`;
-      return;
-    }
-    const geoData = await geoRes.json();
-    const addr = geoData.address || {};
-    cityName = addr.city || addr.town || addr.municipality || addr.village || null;
-    if(!cityName){
-      board.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Étape 2 réussie mais aucune ville identifiée à cette position précise.</div>';
-      return;
-    }
-  } catch(e){
-    board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur réseau à l'étape 2 : ${e.message || e}</div>`;
-    return;
-  }
-
-  // Étape 3 : nom de la ville → un débarcadère vérifié à ce nom (souvent "Ville-Ouchy" etc.,
-  // donc on vérifie plusieurs candidats, pas seulement une correspondance exacte du nom).
-  board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Étape 3/3 — Ville identifiée : ${cityName}. Recherche d'un débarcadère…</div>`;
-  try{
-    const res = await fetch(`${API}/locations?query=${encodeURIComponent(cityName)}`);
+    const res = await fetch(`${API}/locations?x=${freshCoords.lat}&y=${freshCoords.lon}&type=station`);
     const data = await res.json();
-    let candidates = (data.stations || []).filter(s => s.id).slice(0, 25);
-    // On teste en priorité les noms évoquant clairement un débarcadère (Ouchy, port, débarcadère...),
-    // avant de balayer le reste dans l'ordre — ça trouve le bon arrêt bien plus vite dans la plupart des cas.
-    const hint = /ouchy|port|débarcadère|debarcadere|quai|embarcadère/i;
-    candidates.sort((a, b) => (hint.test(b.name) ? 1 : 0) - (hint.test(a.name) ? 1 : 0));
+    const candidates = (data.stations || []).filter(s => s.id).slice(0, 40);
 
     let found = null;
     let lastDiag = null;
     for(let i = 0; i < candidates.length; i++){
-      board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Étape 3/3 — Vérification ${i+1}/${candidates.length} : ${candidates[i].name}…</div>`;
+      board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Vérification ${i+1}/${candidates.length} : ${candidates[i].name}…</div>`;
       const diag = await checkBoatDiagnostic(candidates[i].id);
       lastDiag = diag;
       if(diag.hasBoat){ found = candidates[i]; break; }
@@ -1390,7 +1367,7 @@ async function loadBoatScreen(forceRefresh){
 
     if(!found){
       const catsFound = lastDiag && lastDiag.cats ? [...new Set(lastDiag.cats)].join(', ') : 'aucune';
-      board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Ville identifiée : ${cityName}. Aucun débarcadère détecté automatiquement parmi ${candidates.length} arrêt(s) testé(s). Dernières catégories vues : ${catsFound}. Essayez la recherche manuelle ci-dessus avec le nom exact du débarcadère (ex. "Ouchy").</div>`;
+      board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Aucun débarcadère détecté automatiquement parmi les ${candidates.length} arrêts les plus proches de vous. Dernières catégories vues : ${catsFound}. Essayez la recherche manuelle ci-dessus avec le nom exact du débarcadère (ex. "Ouchy").</div>`;
       return;
     }
 
