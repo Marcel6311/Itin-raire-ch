@@ -1381,7 +1381,8 @@ async function loadBoatScreen(forceRefresh){
     ).join('');
     boatBox.classList.add('show');
     boatBox.querySelectorAll('[data-known-idx]').forEach(el => {
-      el.addEventListener('mousedown', () => {
+      const selectThisStop = (e) => {
+        if(e) e.preventDefault(); // empêche le clic d'être annulé par la perte de focus du champ sur mobile
         const name = matches[parseInt(el.dataset.knownIdx)];
         boatInput.value = name;
         boatBox.classList.remove('show');
@@ -1401,7 +1402,9 @@ async function loadBoatScreen(forceRefresh){
           const searchTerm = name.replace(/[,()\/]/g, ' ').replace(/\s{2,}/g, ' ').trim();
           fetchAutocomplete(searchTerm, 'autocomplete-boat', 'input-boat', 'boatboard');
         }
-      });
+      };
+      el.addEventListener('mousedown', selectThisStop);
+      el.addEventListener('touchend', selectThisStop);
     });
   }
 
