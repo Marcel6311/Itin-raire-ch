@@ -201,14 +201,11 @@
       <div class="chip" onclick="shiftHomeTime(5)">+ 5 min</div>
     </div>
 
+    <div style="padding:0 20px 8px; display:flex; justify-content:flex-end;">
+      <button onclick="openFairtiq()" style="background:#00A99D; color:#fff; border:none; border-radius:8px; padding:7px 14px; font-size:13px; font-weight:700; cursor:pointer;">🎫 Ouvrir FAIRTIQ</button>
+    </div>
     <div class="flapboard" id="flapboard">
-      <div class="flap-header">
-        <span>Arrêts à proximité</span>
-        <span style="display:flex; align-items:center; gap:8px;">
-          Temps réel
-          <button onclick="openFairtiq()" title="Ouvrir FAIRTIQ" style="background:#00A99D; color:#fff; border:none; border-radius:6px; padding:4px 9px; font-size:11px; font-weight:700; cursor:pointer;">FAIRTIQ ↗</button>
-        </span>
-      </div>
+      <div class="flap-header"><span>Arrêts à proximité</span><span>Temps réel</span></div>
       <div class="flap-loading">En attente de votre position…</div>
     </div>
 
