@@ -202,7 +202,13 @@
     </div>
 
     <div class="flapboard" id="flapboard">
-      <div class="flap-header"><span>Arrêts à proximité</span><span>Temps réel</span></div>
+      <div class="flap-header">
+        <span>Arrêts à proximité</span>
+        <span style="display:flex; align-items:center; gap:8px;">
+          Temps réel
+          <button onclick="openFairtiq()" title="Ouvrir FAIRTIQ" style="background:#00A99D; color:#fff; border:none; border-radius:6px; padding:4px 9px; font-size:11px; font-weight:700; cursor:pointer;">FAIRTIQ ↗</button>
+        </span>
+      </div>
       <div class="flap-loading">En attente de votre position…</div>
     </div>
 
@@ -421,6 +427,17 @@ function showToast(msg, ms){
   t.classList.add('show');
   clearTimeout(t._timer);
   t._timer = setTimeout(()=> t.classList.remove('show'), ms || 3000);
+}
+
+// Ouvre l'appli FAIRTIQ (billetterie transport) si installée. Le lien "fairtiq://" suit la
+// convention standard iOS mais n'est pas officiellement documenté par FAIRTIQ — s'il ne
+// fonctionne pas, on bascule automatiquement vers sa fiche App Store après une courte pause.
+function openFairtiq(){
+  const fallbackTimer = setTimeout(() => {
+    window.location.href = 'https://apps.apple.com/ch/app/fairtiq/id1094360403';
+  }, 1200);
+  window.addEventListener('pagehide', () => clearTimeout(fallbackTimer), { once: true });
+  window.location.href = 'fairtiq://';
 }
 
 // ---------- Compteur d'usage local (indicatif uniquement — voir Google Cloud Console pour les vrais chiffres) ----------
