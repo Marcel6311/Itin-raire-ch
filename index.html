@@ -2388,7 +2388,7 @@ async function loadMonuments(lat, lon){
     }
 
     list.innerHTML = monuments.map(m => `
-      <div class="place-card" onclick="openPlaceDetail('${m.id}', ${m.lat}, ${m.lon})" style="cursor:pointer;">
+      <div class="place-card" onclick="openPlaceDetail('${m.id}', ${m.lat}, ${m.lon}, '${m.name.replace(/'/g, "\\'")}')" style="cursor:pointer;">
         <div class="place-thumb" style="background:var(--coral-dim);">🗿</div>
         <div class="place-info">
           <div class="place-name">${m.name}</div>
@@ -2537,7 +2537,7 @@ function renderAroundPlaces(sortBy){
 }
 
 // ---------- Fiche détaillée d'un restaurant ----------
-async function openPlaceDetail(placeId, monLat, monLon){
+async function openPlaceDetail(placeId, monLat, monLon, monName){
   const modal = document.getElementById('place-detail-modal');
   const body = document.getElementById('place-detail-body');
   modal.classList.add('show');
@@ -2549,9 +2549,22 @@ async function openPlaceDetail(placeId, monLat, monLon){
   let historyHtml = '';
   if(monLat && monLon){
     try{
-      const geoRes = await fetch(`https://fr.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${monLat}|${monLon}&gsradius=150&gslimit=1&format=json&origin=*`);
+      const geoRes = await fetch(`https://fr.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${monLat}|${monLon}&gsradius=200&gslimit=6&format=json&origin=*`);
       const geoData = await geoRes.json();
-      const hit = (geoData.query?.geosearch || [])[0];
+      const candidates = geoData.query?.geosearch || [];
+
+      // On ne prend PAS aveuglément l'article le plus proche géographiquement (ça peut être une
+      // rue, un bâtiment voisin ou tout autre chose sans rapport) — on cherche plutôt, parmi les
+      // articles proches, celui dont le titre partage un mot significatif avec le nom du monument.
+      const stopWords = new Set(['de','du','des','la','le','les','l','d','et','saint','sainte','st','église','chapelle','statue','monument','fontaine']);
+      const nameWords = (monName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .split(/[^a-z0-9]+/).filter(w => w.length > 2 && !stopWords.has(w));
+
+      const hit = candidates.find(c => {
+        const titleNorm = c.title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return nameWords.some(w => titleNorm.includes(w));
+      });
+
       if(hit){
         const detailRes = await fetch(`https://fr.wikipedia.org/w/api.php?action=query&pageids=${hit.pageid}&prop=extracts&exintro=1&explaintext=1&exchars=600&format=json&origin=*`);
         const detailData = await detailRes.json();
