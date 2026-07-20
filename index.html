@@ -2361,6 +2361,8 @@ async function loadMonuments(lat, lon){
       name: p.displayName ? p.displayName.text : 'Monument',
       rating: p.rating || null,
       ratingCount: p.userRatingCount || 0,
+      lat: p.location.latitude,
+      lon: p.location.longitude,
       distance: Math.round(haversineMeters(lat, lon, p.location.latitude, p.location.longitude))
     })).sort((a,b) => a.distance - b.distance);
 
@@ -2372,7 +2374,7 @@ async function loadMonuments(lat, lon){
     }
 
     list.innerHTML = monuments.map(m => `
-      <div class="place-card" onclick="openPlaceDetail('${m.id}')" style="cursor:pointer;">
+      <div class="place-card" onclick="openPlaceDetail('${m.id}', ${m.lat}, ${m.lon})" style="cursor:pointer;">
         <div class="place-thumb" style="background:var(--coral-dim);">🗿</div>
         <div class="place-info">
           <div class="place-name">${m.name}</div>
@@ -2521,11 +2523,36 @@ function renderAroundPlaces(sortBy){
 }
 
 // ---------- Fiche détaillée d'un restaurant ----------
-async function openPlaceDetail(placeId){
+async function openPlaceDetail(placeId, monLat, monLon){
   const modal = document.getElementById('place-detail-modal');
   const body = document.getElementById('place-detail-body');
   modal.classList.add('show');
   body.innerHTML = '<div class="flap-loading" style="padding:20px;">Chargement de la fiche…</div>';
+
+  // Si des coordonnées sont fournies (cas des monuments), on cherche en parallèle un article
+  // Wikipedia proche pour donner l'histoire du lieu — Google Places ne fournit pas ce genre
+  // de contenu, ce n'est pas sa vocation (données commerciales : avis, horaires, téléphone).
+  let historyHtml = '';
+  if(monLat && monLon){
+    try{
+      const geoRes = await fetch(`https://fr.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${monLat}|${monLon}&gsradius=150&gslimit=1&format=json&origin=*`);
+      const geoData = await geoRes.json();
+      const hit = (geoData.query?.geosearch || [])[0];
+      if(hit){
+        const detailRes = await fetch(`https://fr.wikipedia.org/w/api.php?action=query&pageids=${hit.pageid}&prop=extracts&exintro=1&explaintext=1&exchars=600&format=json&origin=*`);
+        const detailData = await detailRes.json();
+        const page = detailData.query?.pages?.[hit.pageid];
+        if(page?.extract){
+          const wikiUrl = `https://fr.wikipedia.org/wiki/${encodeURIComponent(page.title.replace(/ /g, '_'))}`;
+          historyHtml = `
+            <div class="section-label" style="margin:14px 0 6px;">📖 Histoire (Wikipedia)</div>
+            <p class="meta-txt" style="line-height:1.5;">${page.extract}</p>
+            <a href="${wikiUrl}" target="_blank" class="meta-txt" style="color:var(--lake);">Lire l'article complet ↗</a>
+          `;
+        }
+      }
+    } catch(e){ /* Pas grave si la recherche Wikipedia échoue, la fiche Google reste affichée */ }
+  }
 
   try{
     const res = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
@@ -2553,6 +2580,7 @@ async function openPlaceDetail(placeId){
       <div style="margin-bottom:10px;">${openTxt}</div>
       ${p.formattedAddress ? `<div class="meta-txt" style="margin-bottom:6px;">📍 ${p.formattedAddress}</div>` : ''}
       ${p.nationalPhoneNumber ? `<div class="meta-txt" style="margin-bottom:6px;">📞 ${p.nationalPhoneNumber}</div>` : ''}
+      ${historyHtml}
       ${hoursHtml ? `<div class="section-label" style="margin:14px 0 6px;">Horaires</div>${hoursHtml}` : ''}
       <button class="btn-primary" id="save-contact-btn" style="margin-top:16px;">💾 Enregistrer dans les contacts</button>
       <div style="display:flex; gap:8px; margin-top:10px;">
@@ -2612,7 +2640,7 @@ function saveTripToCalendar(c){
   let events = '';
   journeySections.forEach((sec, i) => {
     const isLast = i === journeySections.length - 1;
-    const alightLabel = isLast ? 'Terminus' : `Descendre à ${sec.arrival.station.name}`;
+    const alightLabel = `Descendre à ${sec.arrival.station.name}`;
     const summary = `${sec.journey.category}${sec.journey.number ? ' ' + sec.journey.number : ''} → ${alightLabel}`;
     events += [
       'BEGIN:VEVENT',
