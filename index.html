@@ -1613,6 +1613,7 @@ async function refreshBoatBoard(id, name){
       const badge = delay > 0 ? `<span class="flap-badge badge-delay">+${delay}</span>` : `<span class="flap-badge badge-ontime">0</span>`;
       const t = fmtTime(j.stop.departure);
       const lineNum = j.number || j.category || '';
+      const platform = j.stop.platform ? 'Quai ' + j.stop.platform : '';
       const journeyKey = journeyCache.length;
       journeyCache.push(j);
       return `<div class="flap-row" onclick="showPassList(${journeyKey})" style="cursor:pointer;">
@@ -1621,7 +1622,7 @@ async function refreshBoatBoard(id, name){
         <div class="flap-mode" style="background:var(--lake);">🛳️</div>
         <span class="flap-line">${lineNum}</span>
         <span class="flap-dest">${j.to || ''}</span>
-      </div>`;
+      </div>${platform ? `<div class="quai-info" style="padding:0 0 6px 91px; font-size:10.5px; font-family:'IBM Plex Mono',monospace;">${platform}</div>` : ''}`;
     }).join('');
 
     slot.innerHTML = `<div class="flapboard"><div class="flap-header"><span>${name}</span><span>Temps réel</span></div>${rows}</div>`;
