@@ -2359,7 +2359,7 @@ async function loadMonuments(lat, lon){
         'X-Goog-FieldMask': 'places.id,places.displayName,places.rating,places.userRatingCount,places.location'
       },
       body: JSON.stringify({
-        includedTypes: ['monument', 'historical_place'],
+        includedTypes: ['monument', 'historical_place', 'sculpture', 'cultural_landmark', 'historical_landmark'],
         maxResultCount: 16,
         rankPreference: 'DISTANCE',
         locationRestriction: { circle: { center: { latitude: lat, longitude: lon }, radius: 2000.0 } }
