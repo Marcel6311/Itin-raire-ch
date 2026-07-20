@@ -341,10 +341,11 @@
       <div class="field">
         <div class="dot dot-from"></div>
         <input type="text" id="input-boat" placeholder="Nom du débarcadère, ex: Lausanne-Ouchy" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" name="debarcadere-libre">
-        <div class="autocomplete" id="autocomplete-boat"></div>
       </div>
     </div>
-    <p class="value-note" style="margin:0 20px 10px;">Détection automatique du débarcadère le plus proche de votre ville, ou tapez un nom manuellement et sélectionnez-le dans la liste.</p>
+    <select id="select-boat" size="6" style="width:calc(100% - 40px); margin:8px 20px 0; font-size:15px; border-radius:10px; border:1px solid var(--line); background:var(--paper-raised); display:none;"></select>
+    <div class="autocomplete" id="autocomplete-boat"></div>
+    <p class="value-note" style="margin:0 20px 10px;">Détection automatique du débarcadère le plus proche de votre ville, ou tapez un nom manuellement et choisissez-le dans le menu natif ci-dessous.</p>
     <div id="boat-board"></div>
   </div>
 
@@ -1362,11 +1363,12 @@ function resetGareTime(){
 }
 
 async function loadBoatScreen(forceRefresh){
-  // Le champ bateau n'utilise plus la recherche API en direct pour les suggestions —
-  // il filtre en local, lettre par lettre, dans la liste des 201 débarcadères officiels
-  // garantis exacts. Bien plus fiable qu'une recherche floue côté serveur.
+  // Le champ bateau filtre en local, lettre par lettre, dans la liste des 220 débarcadères
+  // officiels garantis exacts, et affiche les résultats dans un <select> — le menu déroulant
+  // NATIF du navigateur (comme le composant "Menu" natif d'Apple), pas une liste construite
+  // à la main, pour un défilement 100% stable sur iPhone.
   const boatInput = document.getElementById('input-boat');
-  const boatBox = document.getElementById('autocomplete-boat');
+  const boatSelect = document.getElementById('select-boat');
 
   function renderKnownBoatMatches(){
     const q = boatInput.value.trim().toLowerCase();
@@ -1375,48 +1377,41 @@ async function loadBoatScreen(forceRefresh){
       : KNOWN_BOAT_STOPS.filter(name => name.toLowerCase().includes(q));
 
     if(matches.length === 0){
-      boatBox.innerHTML = `<div class="ac-hint">Aucun débarcadère connu ne correspond — vérifie l'orthographe.</div>`;
-      boatBox.classList.add('show');
+      boatSelect.innerHTML = `<option disabled>Aucun débarcadère connu ne correspond</option>`;
+      boatSelect.style.display = 'block';
       return;
     }
 
-    boatBox.innerHTML = matches.map((name, i) =>
-      `<div class="ac-item" data-known-idx="${i}"><span>⚓ ${name}</span></div>`
-    ).join('');
-    boatBox.classList.add('show');
-    boatBox.querySelectorAll('[data-known-idx]').forEach(el => {
-      const selectThisStop = (e) => {
-        if(e) e.preventDefault(); // empêche le clic d'être annulé par la perte de focus du champ sur mobile
-        const name = matches[parseInt(el.dataset.knownIdx)];
-        boatInput.value = name;
-        boatBox.classList.remove('show');
-
-        const knownId = findKnownBoatId(name);
-        if(knownId){
-          // Numéro officiel connu — on va chercher les horaires directement, sans recherche.
-          if(!verifiedBoatStops.some(s => s.id === knownId)) verifiedBoatStops.push({ id: knownId, name });
-          const boardEl = document.getElementById('boat-board');
-          boardEl.innerHTML = verifiedBoatStops.map(s => `<div id="boat-stop-${s.id}" style="margin-bottom:14px;"></div>`).join('');
-          refreshAllBoats();
-          stopBoatBoardRefresh();
-          boatBoardInterval = setInterval(refreshAllBoats, 45000);
-          boatInput.value = '';
-        } else {
-          // Repli pour la seule entrée sans numéro vérifié : recherche classique avec vérification.
-          const searchTerm = name.replace(/[,()\/]/g, ' ').replace(/\s{2,}/g, ' ').trim();
-          fetchAutocomplete(searchTerm, 'autocomplete-boat', 'input-boat', 'boatboard');
-        }
-      };
-      el.addEventListener('mousedown', selectThisStop);
-      el.addEventListener('touchend', selectThisStop);
-    });
+    boatSelect.innerHTML = '<option disabled selected value="">— Choisir un débarcadère —</option>' +
+      matches.map(name => `<option value="${name.replace(/"/g, '&quot;')}">⚓ ${name}</option>`).join('');
+    boatSelect.style.display = 'block';
   }
+
+  boatSelect.onchange = () => {
+    const name = boatSelect.value;
+    if(!name) return;
+    boatInput.value = name;
+    boatSelect.style.display = 'none';
+
+    const knownId = findKnownBoatId(name);
+    if(knownId){
+      // Numéro officiel connu — on va chercher les horaires directement, sans recherche.
+      if(!verifiedBoatStops.some(s => s.id === knownId)) verifiedBoatStops.push({ id: knownId, name });
+      const boardEl = document.getElementById('boat-board');
+      boardEl.innerHTML = verifiedBoatStops.map(s => `<div id="boat-stop-${s.id}" style="margin-bottom:14px;"></div>`).join('');
+      refreshAllBoats();
+      stopBoatBoardRefresh();
+      boatBoardInterval = setInterval(refreshAllBoats, 45000);
+      boatInput.value = '';
+    } else {
+      // Repli pour la seule entrée sans numéro vérifié : recherche classique avec vérification.
+      const searchTerm = name.replace(/[,()\/]/g, ' ').replace(/\s{2,}/g, ' ').trim();
+      fetchAutocomplete(searchTerm, 'autocomplete-boat', 'input-boat', 'boatboard');
+    }
+  };
 
   boatInput.addEventListener('focus', renderKnownBoatMatches);
   boatInput.addEventListener('input', renderKnownBoatMatches);
-  // Aucune fermeture automatique de la liste : ni au défilement, ni à la perte de focus,
-  // ni au clic ailleurs. Elle ne se ferme QUE quand une destination est sélectionnée
-  // (géré directement dans selectThisStop ci-dessus).
 
   const board = document.getElementById('boat-board');
 
