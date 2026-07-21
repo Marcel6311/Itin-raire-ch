@@ -203,6 +203,7 @@
 
     <div style="padding:0 20px 8px;">
       <input type="text" id="home-dest-filter" placeholder="🔍 Filtrer : n'afficher que les trajets passant par… (ex: Renens)" oninput="onHomeDestFilterChange()" autocomplete="off" autocorrect="off" spellcheck="false" style="width:100%; box-sizing:border-box; padding:9px 12px; border-radius:8px; border:1px solid var(--line); font-size:13.5px; background:var(--paper-raised);">
+      <select id="home-dest-select" size="5" onchange="pickHomeDestFilter()" style="width:100%; box-sizing:border-box; margin-top:6px; border-radius:8px; border:1px solid var(--line); font-size:13.5px; background:var(--paper-raised); display:none;"></select>
     </div>
     <div style="padding:0 20px 8px; display:flex; justify-content:flex-end;">
       <button onclick="openFairtiq()" style="background:#00A99D; color:#fff; border:none; border-radius:8px; padding:7px 14px; font-size:13px; font-weight:700; cursor:pointer;">🎫 Ouvrir FAIRTIQ</button>
@@ -675,10 +676,40 @@ function journeyMatchesFilter(j){
 }
 function onHomeDestFilterChange(){
   clearTimeout(_homeDestFilterDebounce);
-  _homeDestFilterDebounce = setTimeout(() => {
-    homeDestFilter = document.getElementById('home-dest-filter').value;
+  const val = document.getElementById('home-dest-filter').value;
+  const select = document.getElementById('home-dest-select');
+  if(val.trim().length < 2){
+    select.style.display = 'none';
+    homeDestFilter = val;
     loadNearbyDepartures();
+    return;
+  }
+  _homeDestFilterDebounce = setTimeout(async () => {
+    try{
+      const res = await fetch(`${API}/locations?query=${encodeURIComponent(val)}&type=station`);
+      const data = await res.json();
+      const stations = (data.stations || []).filter(s => s.id).slice(0, 20);
+      if(stations.length === 0){
+        select.innerHTML = `<option disabled>Aucun arrêt trouvé</option>`;
+      } else {
+        select.innerHTML = stations.map(s => `<option value="${s.name.replace(/"/g, '&quot;')}">${s.name}</option>`).join('');
+      }
+      select.style.display = 'block';
+      // On applique aussi le filtre texte tel quel, sans attendre un choix dans le menu —
+      // pratique si le nom tapé correspond déjà exactement à un arrêt.
+      homeDestFilter = val;
+      loadNearbyDepartures();
+    } catch(e){ /* pas grave, le filtre texte simple continue de fonctionner sans le menu */ }
   }, 400);
+}
+
+function pickHomeDestFilter(){
+  const select = document.getElementById('home-dest-select');
+  const chosen = select.value;
+  document.getElementById('home-dest-filter').value = chosen;
+  select.style.display = 'none';
+  homeDestFilter = chosen;
+  loadNearbyDepartures();
 }
 
 function updateHomeTimeLabel(){
