@@ -336,6 +336,10 @@
       </div>
     </div>
     <p class="value-note" style="margin:0 20px 10px;">Tapez le nom d'une ville (pas "gare" en plus — juste le nom, ex. "Lausanne"), sélectionnez-la dans la liste. Tableau des départs (trains uniquement), actualisé automatiquement toutes les 45 s. Il n'existe pas de tableau des arrivées séparé dans les données suisses officielles — comme sur les vrais écrans de gare, ce sont les départs qui comptent pour savoir où aller.</p>
+    <div style="padding:0 20px 8px;">
+      <input type="text" id="gare-dest-filter" placeholder="🔍 Filtrer : n'afficher que les trains passant par… (ex: Renens)" oninput="onGareDestFilterChange()" autocomplete="off" autocorrect="off" spellcheck="false" style="width:100%; box-sizing:border-box; padding:9px 12px; border-radius:8px; border:1px solid var(--line); font-size:13.5px; background:var(--paper-raised);">
+      <select id="gare-dest-select" size="5" onchange="pickGareDestFilter()" style="width:100%; box-sizing:border-box; margin-top:6px; border-radius:8px; border:1px solid var(--line); font-size:13.5px; background:var(--paper-raised); display:none;"></select>
+    </div>
     <div id="station-board"></div>
   </div>
 
@@ -710,6 +714,54 @@ function pickHomeDestFilter(){
   select.style.display = 'none';
   homeDestFilter = chosen;
   loadNearbyDepartures();
+}
+
+// Même filtre "passe par…" pour l'écran Gare (trains)
+let gareDestFilter = '';
+let _gareDestFilterDebounce = null;
+function journeyMatchesGareFilter(j){
+  if(!gareDestFilter) return true;
+  const q = normalizeForSearch(gareDestFilter);
+  if(normalizeForSearch(j.to).includes(q)) return true;
+  return (j.passList || []).some(p => normalizeForSearch(p.station?.name).includes(q));
+}
+function refreshGareBoardsNow(){
+  verifiedGares.forEach(g => refreshOneStationBoard(g.id, g.name, g.distance, g.coordinate));
+}
+function onGareDestFilterChange(){
+  clearTimeout(_gareDestFilterDebounce);
+  const val = document.getElementById('gare-dest-filter').value;
+  const select = document.getElementById('gare-dest-select');
+  if(val.trim().length < 2){
+    select.style.display = 'none';
+    gareDestFilter = val;
+    refreshGareBoardsNow();
+    return;
+  }
+  _gareDestFilterDebounce = setTimeout(async () => {
+    try{
+      const res = await fetch(`${API}/locations?query=${encodeURIComponent(val)}&type=station`);
+      const data = await res.json();
+      const stations = (data.stations || []).filter(s => s.id).slice(0, 20);
+      if(stations.length === 0){
+        select.innerHTML = `<option disabled>Aucun arrêt trouvé</option>`;
+      } else {
+        select.innerHTML = stations.map(s => `<option value="${s.name.replace(/"/g, '&quot;')}">${s.name}</option>`).join('');
+      }
+      select.style.display = 'block';
+      gareDestFilter = val;
+      refreshGareBoardsNow();
+    } catch(e){ /* pas grave, le filtre texte simple continue de fonctionner sans le menu */ }
+  }, 400);
+}
+
+function pickGareDestFilter(){
+  const select = document.getElementById('gare-dest-select');
+  const chosen = select.value;
+  document.getElementById('gare-dest-filter').value = chosen;
+  select.style.display = 'none';
+  gareDestFilter = chosen;
+  refreshGareBoardsNow();
 }
 
 function updateHomeTimeLabel(){
@@ -1718,7 +1770,8 @@ async function refreshOneStationBoard(id, name, distance, coordinate){
     const res = await fetch(`${API}/stationboard?id=${id}&limit=25${dtParam}`);
     const data = await res.json();
     const trains = (data.stationboard || [])
-      .filter(j => TRAIN_CATEGORIES.includes((j.category || '').toUpperCase()));
+      .filter(j => TRAIN_CATEGORIES.includes((j.category || '').toUpperCase()))
+      .filter(journeyMatchesGareFilter);
     const distTxt = distance ? ` · ${Math.round(distance)} m` : '';
 
     if(trains.length === 0){
