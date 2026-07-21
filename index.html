@@ -201,6 +201,9 @@
       <div class="chip" onclick="shiftHomeTime(5)">+ 5 min</div>
     </div>
 
+    <div style="padding:0 20px 8px;">
+      <input type="text" id="home-dest-filter" placeholder="🔍 Filtrer : n'afficher que les trajets passant par… (ex: Renens)" oninput="onHomeDestFilterChange()" autocomplete="off" autocorrect="off" spellcheck="false" style="width:100%; box-sizing:border-box; padding:9px 12px; border-radius:8px; border:1px solid var(--line); font-size:13.5px; background:var(--paper-raised);">
+    </div>
     <div style="padding:0 20px 8px; display:flex; justify-content:flex-end;">
       <button onclick="openFairtiq()" style="background:#00A99D; color:#fff; border:none; border-radius:8px; padding:7px 14px; font-size:13px; font-weight:700; cursor:pointer;">🎫 Ouvrir FAIRTIQ</button>
     </div>
@@ -657,6 +660,27 @@ function renderGeoError(msg){
 // Décalage temporel du tableau d'accueil (même principe que sur l'écran Gare)
 let homeTimeOffsetMin = 0;
 
+// Filtre "ne montrer que les trajets passant par…" — recherché dans TOUS les arrêts
+// intermédiaires (passList), pas seulement la destination finale affichée.
+let homeDestFilter = '';
+let _homeDestFilterDebounce = null;
+function normalizeForSearch(s){
+  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+function journeyMatchesFilter(j){
+  if(!homeDestFilter) return true;
+  const q = normalizeForSearch(homeDestFilter);
+  if(normalizeForSearch(j.to).includes(q)) return true;
+  return (j.passList || []).some(p => normalizeForSearch(p.station?.name).includes(q));
+}
+function onHomeDestFilterChange(){
+  clearTimeout(_homeDestFilterDebounce);
+  _homeDestFilterDebounce = setTimeout(() => {
+    homeDestFilter = document.getElementById('home-dest-filter').value;
+    loadNearbyDepartures();
+  }, 400);
+}
+
 function updateHomeTimeLabel(){
   const label = document.getElementById('home-time-label');
   if(!label) return;
@@ -797,6 +821,7 @@ async function renderStationGroup(station){
     const res = await fetch(`${API}/stationboard?id=${station.id}&limit=20${dtParam}`);
     const data = await res.json();
     board = (data.stationboard || []).sort((a, b) => actualDepartureTime(a) - actualDepartureTime(b));
+    board = board.filter(journeyMatchesFilter);
 
     const groupByQuai = board.some(j => j.stop.platform);
     const byGroup = new Map();
