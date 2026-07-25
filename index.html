@@ -1682,11 +1682,16 @@ async function loadStationScreen(forceRefresh){
       candidates.sort((a, b) => {
         const aExact = a.name.toLowerCase() === cityName.toLowerCase() ? 0 : 1;
         const bExact = b.name.toLowerCase() === cityName.toLowerCase() ? 0 : 1;
-        return aExact - bExact;
+        if(aExact !== bExact) return aExact - bExact;
+        // Un nom finissant par ", gare" désigne souvent un pôle bus/métro, pas la vraie gare CFF
+        // (ex. "Renens VD, gare" = bus/métro, "Renens VD" = la vraie gare) — on le passe en dernier.
+        const aGareSuffix = /,\s*gare$/i.test(a.name) ? 1 : 0;
+        const bGareSuffix = /,\s*gare$/i.test(b.name) ? 1 : 0;
+        return aGareSuffix - bGareSuffix;
       });
 
       let found = null;
-      const topCandidates = candidates.slice(0, 5);
+      const topCandidates = candidates.slice(0, 12);
       const checks = await Promise.all(topCandidates.map(c => isRealTrainStation(c.id)));
       const foundIdx = checks.findIndex(ok => ok);
       if(foundIdx !== -1) found = topCandidates[foundIdx];
