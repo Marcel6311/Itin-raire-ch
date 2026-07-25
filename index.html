@@ -1056,6 +1056,12 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
     if(kind === 'boatboard'){
       stationItems.sort((a, b) => (/\(lac\)|\(see\)/i.test(b.name) ? 1 : 0) - (/\(lac\)|\(see\)/i.test(a.name) ? 1 : 0));
     }
+    // Sur l'écran Gare, un nom finissant par ", gare" désigne souvent un pôle bus/métro voisin
+    // (ex. "Renens VD, gare") plutôt que la vraie gare CFF (ex. "Renens VD") — on le passe après,
+    // pour réduire le risque de cliquer sur la mauvaise entrée par erreur.
+    if(kind === 'stationboard'){
+      stationItems.sort((a, b) => (/,\s*gare$/i.test(a.name) ? 1 : 0) - (/,\s*gare$/i.test(b.name) ? 1 : 0));
+    }
     // Tri par proximité UNIQUEMENT pour la destination d'un trajet, et seulement si la requête
     // ne précise pas de ville (pas de virgule). Sur les écrans Gare et Bateau, la pertinence
     // du nom doit toujours primer — sinon un résultat proche mais non pertinent (ex.
