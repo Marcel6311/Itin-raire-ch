@@ -1173,9 +1173,9 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
           return;
         }
         if(!verifiedGares.some(g => g.id === s.id)){
-          verifiedGares.push({ id: s.id, name: s.name, distance: null, coordinate: s.coordinate });
-          manualGares.push({ id: s.id, name: s.name, distance: null });
-          board.insertAdjacentHTML('beforeend', `<div id="gare-board-${s.id}" style="margin-bottom:14px;"></div>`);
+          verifiedGares = [{ id: s.id, name: s.name, distance: null, coordinate: s.coordinate }];
+          manualGares = [{ id: s.id, name: s.name, distance: null }];
+          board.innerHTML = `<div id="gare-board-${s.id}" style="margin-bottom:14px;"></div>`;
           refreshOneStationBoard(s.id, s.name, null, s.coordinate);
         }
         document.getElementById(inputId).value = '';
@@ -1707,9 +1707,10 @@ async function loadStationScreen(forceRefresh){
         return;
       }
 
-      const merged = [...manualGares];
-      if(!merged.some(m => m.id === found.id)) merged.push(found);
-      verifiedGares = merged;
+      // Une détection automatique par GPS remplace tout ce qui était affiché avant — pas
+      // d'empilement d'anciennes gares à faire défiler, seule la plus proche compte désormais.
+      manualGares = [];
+      verifiedGares = [found];
       lastGareSearchCoords = freshCoords;
     } catch(e){
       board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur réseau à l'étape 3 : ${e.message || e}</div>`;
