@@ -308,11 +308,11 @@
       </div>
     </div>
     <div style="padding:0 20px 8px; display:flex; gap:8px;">
-      <a href="https://plateforme10.ch/en/agenda/" target="_blank" style="flex:1; text-align:center; background:var(--coral); color:#fff; text-decoration:none; border-radius:8px; padding:8px 10px; font-size:12.5px; font-weight:700;">🎭 Agenda Plateforme 10</a>
-      <a href="https://www.lausanne.ch/agenda-et-actualites/agenda.html" target="_blank" style="flex:1; text-align:center; background:var(--ink); color:#fff; text-decoration:none; border-radius:8px; padding:8px 10px; font-size:12.5px; font-weight:700;">📅 Agenda Ville de Lausanne</a>
+      <a href="https://plateforme10.ch/en/agenda/" target="_blank" rel="noopener noreferrer" style="flex:1; text-align:center; background:var(--coral); color:#fff; text-decoration:none; border-radius:8px; padding:8px 10px; font-size:12.5px; font-weight:700;">🎭 Agenda Plateforme 10</a>
+      <a href="https://www.lausanne.ch/agenda-et-actualites/agenda.html" target="_blank" rel="noopener noreferrer" style="flex:1; text-align:center; background:var(--ink); color:#fff; text-decoration:none; border-radius:8px; padding:8px 10px; font-size:12.5px; font-weight:700;">📅 Agenda Ville de Lausanne</a>
     </div>
     <div style="padding:0 20px 8px;">
-      <a href="https://www.google.ch" target="_blank" style="display:block; text-align:center; background:#4285F4; color:#fff; text-decoration:none; border-radius:8px; padding:8px 10px; font-size:12.5px; font-weight:700;">📷 Ouvrir Google (recherche par photo) — touchez l'icône appareil photo dans le champ</a>
+      <a href="https://www.google.ch" target="_blank" rel="noopener noreferrer" style="display:block; text-align:center; background:#4285F4; color:#fff; text-decoration:none; border-radius:8px; padding:8px 10px; font-size:12.5px; font-weight:700;">📷 Ouvrir Google (recherche par photo) — touchez l'icône appareil photo dans le champ</a>
     </div>
     <div id="visit-content"></div>
   </div>
@@ -1873,7 +1873,7 @@ async function loadShopScreen(){
   content.innerHTML = `
     <p class="meta-txt" style="margin:0 20px 10px; font-family:'IBM Plex Mono',monospace;">
       📍 Recherche autour de ${lat.toFixed(5)}, ${lon.toFixed(5)} —
-      <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" style="color:var(--lake);">vérifier sur Maps ↗</a>
+      <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" rel="noopener noreferrer" style="color:var(--lake);">vérifier sur Maps ↗</a>
     </p>
     <p class="value-note" style="margin:10px 20px 12px;">Commerces dans un rayon de 500 m autour de votre position réelle, triés par distance.</p>
     <div id="shop-list"><div class="flap-loading" style="padding:0 20px;">Recherche des commerces à proximité…</div></div>
@@ -1954,12 +1954,12 @@ async function loadCinemaScreen(){
   content.innerHTML = `
     <p class="meta-txt" style="margin:0 20px 10px; font-family:'IBM Plex Mono',monospace;">
       📍 Recherche autour de ${lat.toFixed(5)}, ${lon.toFixed(5)} —
-      <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" style="color:var(--lake);">vérifier sur Maps ↗</a>
+      <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" rel="noopener noreferrer" style="color:var(--lake);">vérifier sur Maps ↗</a>
     </p>
     <div class="agenda-card">
       <div class="agenda-title">🎬 Séances du jour</div>
       <div class="agenda-sub">Pas d'API publique pour les horaires de films en Suisse — voici un accès direct au programme complet sur Cineman.ch, la référence pour toutes les salles du pays.</div>
-      <a class="agenda-link" href="https://www.cineman.ch/fr/seances/" target="_blank">Voir les séances ↗</a>
+      <a class="agenda-link" href="https://www.cineman.ch/fr/seances/" target="_blank" rel="noopener noreferrer">Voir les séances ↗</a>
     </div>
     <p class="value-note" style="margin:10px 20px 12px;">Cinémas dans un rayon de 3 km autour de votre position réelle, triés par distance.</p>
     <div id="cinema-list"><div class="flap-loading" style="padding:0 20px;">Recherche des cinémas à proximité…</div></div>
@@ -2090,12 +2090,12 @@ async function loadAroundScreen(mode){
   body.innerHTML = `
     <p class="meta-txt" style="margin:10px 20px 10px; font-family:'IBM Plex Mono',monospace;">
       📍 Recherche autour de ${lat.toFixed(5)}, ${lon.toFixed(5)} —
-      <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" style="color:var(--lake);">vérifier sur Maps ↗</a>
+      <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" rel="noopener noreferrer" style="color:var(--lake);">vérifier sur Maps ↗</a>
     </p>
     <div class="agenda-card">
       <div class="agenda-title">🔴 Ce qui se passe ici aujourd'hui</div>
       <div class="agenda-sub">Il n'existe pas de flux fiable et à jour pour les événements locaux en Suisse — plutôt que d'afficher une date qu'on ne peut pas garantir, voici un accès direct vers l'agenda le plus pertinent pour ce lieu.</div>
-      <a class="agenda-link" href="https://www.google.com/search?q=${agendaQuery}" target="_blank">Voir l'agenda ↗</a>
+      <a class="agenda-link" href="https://www.google.com/search?q=${agendaQuery}" target="_blank" rel="noopener noreferrer">Voir l'agenda ↗</a>
     </div>
 
     <div class="sort-row" id="cuisine-row">
@@ -2467,14 +2467,14 @@ async function loadVisitScreen(mode){
     <div class="agenda-card" style="background:#1B4C57;">
       <div class="agenda-title">⚽ ${nearbyStadium.club} joue ici</div>
       <div class="agenda-sub">Stade ${nearbyStadium.name}, à ${Math.round(nearbyStadium.dist)} m. Le calendrier officiel des matchs (Swiss Football League) n'est pas filtré par stade, mais tu y trouveras les dates et heures de ${nearbyStadium.club}.</div>
-      <a class="agenda-link" href="https://sfl.ch/calendar/calendrier-superleague" target="_blank">Voir le calendrier SFL ↗</a>
+      <a class="agenda-link" href="https://sfl.ch/calendar/calendrier-superleague" target="_blank" rel="noopener noreferrer">Voir le calendrier SFL ↗</a>
     </div>
   ` : '';
 
   body.innerHTML = `
     <p class="meta-txt" style="margin:10px 20px 10px; font-family:'IBM Plex Mono',monospace;">
       📍 Recherche autour de ${lat.toFixed(5)}, ${lon.toFixed(5)} —
-      <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" style="color:var(--lake);">vérifier sur Maps ↗</a>
+      <a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" rel="noopener noreferrer" style="color:var(--lake);">vérifier sur Maps ↗</a>
     </p>
     ${stadiumCardHtml}
     <p class="value-note" style="margin-top:10px;">Sites et lieux référencés sur Wikipedia à proximité, triés par distance.</p>
@@ -2572,7 +2572,7 @@ async function loadOfficialEvents(lat, lon){
         <div class="place-info">
           <div class="place-name">${a.name}</div>
           <div class="meta-txt" style="margin-top:3px;">${a.event.location || ''}</div>
-          ${a.url ? `<a href="${a.url}" target="_blank" style="font-size:11.5px; color:var(--lake);">Voir la fiche officielle ↗</a>` : ''}
+          ${a.url ? `<a href="${a.url}" target="_blank" rel="noopener noreferrer" style="font-size:11.5px; color:var(--lake);">Voir la fiche officielle ↗</a>` : ''}
         </div>
       </div>
     `).join('');
@@ -2670,7 +2670,7 @@ async function openAttractionDetail(pageid){
       googleInfoHtml = `
         <div class="section-label" style="margin:14px 0 6px;">📍 Infos pratiques (Google)</div>
         ${g.nationalPhoneNumber ? `<div class="meta-txt" style="margin-bottom:6px;">📞 ${g.nationalPhoneNumber}</div>` : ''}
-        ${g.websiteUri ? `<a href="${g.websiteUri}" target="_blank" class="meta-txt" style="color:var(--lake); display:block; margin-bottom:6px;">🌐 ${g.websiteUri.replace(/^https?:\/\//, '')} ↗</a>` : ''}
+        ${g.websiteUri ? `<a href="${g.websiteUri}" target="_blank" rel="noopener noreferrer" class="meta-txt" style="color:var(--lake); display:block; margin-bottom:6px;">🌐 ${g.websiteUri.replace(/^https?:\/\//, '')} ↗</a>` : ''}
         ${hoursHtml}
       `;
     }
@@ -2682,8 +2682,8 @@ async function openAttractionDetail(pageid){
     <p class="meta-txt" style="line-height:1.5;">${p.extract || "Pas de description disponible pour ce lieu."}</p>
     ${googleInfoHtml}
     <div style="display:flex; gap:8px; margin-top:16px;">
-      <a href="https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=${p.lat},${p.lon}" target="_blank" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">🗺️ Itinéraire à pied</a>
-      <a href="${wikiUrl}" target="_blank" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">📖 Wikipedia</a>
+      <a href="https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=${p.lat},${p.lon}" target="_blank" rel="noopener noreferrer" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">🗺️ Itinéraire à pied</a>
+      <a href="${wikiUrl}" target="_blank" rel="noopener noreferrer" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">📖 Wikipedia</a>
     </div>
     <p class="meta-txt" style="margin-top:14px; line-height:1.4;">ⓘ Source : Wikipedia (contenu ouvert, licence Creative Commons) — pas un guide éditorialisé, informations parfois incomplètes selon les contributions.</p>
   `;
@@ -2756,7 +2756,7 @@ async function openPlaceDetail(placeId, monLat, monLon, monName){
           historyHtml = `
             <div class="section-label" style="margin:14px 0 6px;">📖 Histoire (Wikipedia)</div>
             <p class="meta-txt" style="line-height:1.5;">${page.extract}</p>
-            <a href="${wikiUrl}" target="_blank" class="meta-txt" style="color:var(--lake);">Lire l'article complet ↗</a>
+            <a href="${wikiUrl}" target="_blank" rel="noopener noreferrer" class="meta-txt" style="color:var(--lake);">Lire l'article complet ↗</a>
           `;
         }
       }
@@ -2769,7 +2769,7 @@ async function openPlaceDetail(placeId, monLat, monLon, monName){
       historyHtml = `
         <div class="section-label" style="margin:14px 0 6px;">📖 Histoire</div>
         <p class="meta-txt" style="line-height:1.5;">Aucun article Wikipedia ni information Google trouvés pour ce lieu précis — beaucoup de statues et monuments locaux ne sont pas référencés dans ces bases.</p>
-        <a href="${searchUrl}" target="_blank" class="meta-txt" style="color:var(--lake);">🔍 Chercher "${monName}" sur Google ↗</a>
+        <a href="${searchUrl}" target="_blank" rel="noopener noreferrer" class="meta-txt" style="color:var(--lake);">🔍 Chercher "${monName}" sur Google ↗</a>
       `;
     }
   }
@@ -2804,8 +2804,8 @@ async function openPlaceDetail(placeId, monLat, monLon, monName){
       ${hoursHtml ? `<div class="section-label" style="margin:14px 0 6px;">Horaires</div>${hoursHtml}` : ''}
       <button class="btn-primary" id="save-contact-btn" style="margin-top:16px;">💾 Enregistrer dans les contacts</button>
       <div style="display:flex; gap:8px; margin-top:10px;">
-        ${p.websiteUri ? `<a href="${p.websiteUri}" target="_blank" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">🌐 Site / Menu</a>` : ''}
-        ${p.googleMapsUri ? `<a href="${p.googleMapsUri}" target="_blank" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">📍 Fiche Google</a>` : ''}
+        ${p.websiteUri ? `<a href="${p.websiteUri}" target="_blank" rel="noopener noreferrer" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">🌐 Site / Menu</a>` : ''}
+        ${p.googleMapsUri ? `<a href="${p.googleMapsUri}" target="_blank" rel="noopener noreferrer" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">📍 Fiche Google</a>` : ''}
       </div>
       <p class="meta-txt" style="margin-top:14px; line-height:1.4;">ⓘ Le menu détaillé n'est pas fourni par l'API Google — le lien "Fiche Google" affiche souvent les photos de menu ajoutées par l'établissement ou les visiteurs.</p>
     `;
