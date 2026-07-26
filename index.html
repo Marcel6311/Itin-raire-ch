@@ -1460,11 +1460,11 @@ async function checkBoatDiagnostic(id){
 
 // Requête réseau avec délai maximum — évite qu'une connexion lente ou instable (train en
 // marche, sous-sol d'une gare) ne bloque l'appli indéfiniment sans jamais échouer proprement.
-async function fetchWithTimeout(url, ms){
+async function fetchWithTimeout(url, ms, options){
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms || 6000);
   try{
-    const res = await fetch(url, { signal: ctrl.signal });
+    const res = await fetch(url, { ...(options || {}), signal: ctrl.signal });
     return res;
   } finally {
     clearTimeout(timer);
@@ -2624,7 +2624,7 @@ async function loadAttractions(lat, lon){
   }
 }
 
-function openAttractionDetail(pageid){
+async function openAttractionDetail(pageid){
   const modal = document.getElementById('place-detail-modal');
   const body = document.getElementById('place-detail-body');
   const p = aroundAttractions.find(a => a.pageid === pageid);
@@ -2637,10 +2637,47 @@ function openAttractionDetail(pageid){
 
   const imgHtml = p.thumbnail ? `<img src="${p.thumbnail}" style="width:100%; border-radius:12px; margin-bottom:12px;">` : '';
   const wikiUrl = `https://fr.wikipedia.org/wiki/${encodeURIComponent(p.title.replace(/ /g, '_'))}`;
+
+  // Wikipedia ne donne ni site officiel, ni téléphone, ni horaires — on cherche en
+  // complément sur Google Places par nom, comme Google Maps le ferait lui-même, pour
+  // récupérer ces infos pratiques si elles existent quelque part dans leur base.
+  let googleInfoHtml = '';
+  try{
+    const res = await fetchWithTimeout(`https://places.googleapis.com/v1/places:searchText`, 6000, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+        'X-Goog-FieldMask': 'places.nationalPhoneNumber,places.websiteUri,places.regularOpeningHours.weekdayDescriptions,places.currentOpeningHours.openNow'
+      },
+      body: JSON.stringify({
+        textQuery: p.title,
+        locationBias: { circle: { center: { latitude: p.lat, longitude: p.lon }, radius: 150.0 } },
+        maxResultCount: 1
+      })
+    });
+    const data = await res.json();
+    const g = (data.places || [])[0];
+    if(g && (g.websiteUri || g.nationalPhoneNumber)){
+      let hoursHtml = '';
+      if(g.regularOpeningHours?.weekdayDescriptions){
+        hoursHtml = `<div class="section-label" style="margin:12px 0 4px;">Horaires (Google)</div>` +
+          g.regularOpeningHours.weekdayDescriptions.map(d => `<div class="meta-txt">${d}</div>`).join('');
+      }
+      googleInfoHtml = `
+        <div class="section-label" style="margin:14px 0 6px;">📍 Infos pratiques (Google)</div>
+        ${g.nationalPhoneNumber ? `<div class="meta-txt" style="margin-bottom:6px;">📞 ${g.nationalPhoneNumber}</div>` : ''}
+        ${g.websiteUri ? `<a href="${g.websiteUri}" target="_blank" class="meta-txt" style="color:var(--lake); display:block; margin-bottom:6px;">🌐 ${g.websiteUri.replace(/^https?:\/\//, '')} ↗</a>` : ''}
+        ${hoursHtml}
+      `;
+    }
+  } catch(e){ /* Pas grave si Google ne trouve rien de correspondant, la fiche Wikipedia reste affichée */ }
+
   body.innerHTML = `
     ${imgHtml}
     <h2 class="app-title" style="font-size:19px; margin-bottom:8px;">${p.title}</h2>
     <p class="meta-txt" style="line-height:1.5;">${p.extract || "Pas de description disponible pour ce lieu."}</p>
+    ${googleInfoHtml}
     <div style="display:flex; gap:8px; margin-top:16px;">
       <a href="https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=${p.lat},${p.lon}" target="_blank" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">🗺️ Itinéraire à pied</a>
       <a href="${wikiUrl}" target="_blank" class="btn-secondary" style="flex:1; text-align:center; text-decoration:none; display:block;">📖 Wikipedia</a>
