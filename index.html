@@ -2484,12 +2484,17 @@ async function loadVisitScreen(mode){
     <p class="value-note">Source : Google Places — monuments, sites historiques et œuvres commémoratives.</p>
     <div id="monuments-list"><div class="flap-loading" style="padding:0 20px;">Recherche des monuments à proximité…</div></div>
 
+    <p class="section-label" style="margin-top:24px;">🚻 Toilettes publiques (1 km)</p>
+    <p class="value-note">Source : Google Places — certaines toilettes de commerces ne sont accessibles qu'à leur clientèle.</p>
+    <div id="toilets-list"><div class="flap-loading" style="padding:0 20px;">Recherche des toilettes à proximité…</div></div>
+
     <p class="section-label" style="margin-top:24px;">🎫 Événements dans les attractions officielles (2 km)</p>
     <p class="value-note">Source : Suisse Tourisme — couvre uniquement les événements liés à des attractions officiellement référencées (musées, sites), pas les concerts ou manifestations indépendantes.</p>
     <div id="official-events-list"><div class="flap-loading" style="padding:0 20px;">Recherche des événements officiels…</div></div>
   `;
   loadAttractions(lat, lon);
   loadMonuments(lat, lon);
+  loadPublicToilets(lat, lon);
   loadOfficialEvents(lat, lon);
 }
 
@@ -2546,6 +2551,65 @@ async function loadMonuments(lat, lon){
     `).join('');
   } catch(e){
     list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Impossible de charger les monuments : ${e.message || e}.</div>`;
+  }
+}
+
+async function loadPublicToilets(lat, lon){
+  const list = document.getElementById('toilets-list');
+  try{
+    const res = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.rating,places.userRatingCount,places.location,places.currentOpeningHours.openNow'
+      },
+      body: JSON.stringify({
+        includedTypes: ['public_bathroom', 'public_bath'],
+        maxResultCount: 16,
+        rankPreference: 'DISTANCE',
+        locationRestriction: { circle: { center: { latitude: lat, longitude: lon }, radius: 1000.0 } }
+      })
+    });
+    const data = await res.json();
+    if(data.error){
+      list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Erreur Google Places : ${data.error.message || 'raison inconnue'} (code ${data.error.status || res.status}).</div>`;
+      return;
+    }
+    const toilets = (data.places || []).map(p => ({
+      id: p.id,
+      name: p.displayName ? p.displayName.text : 'Toilettes publiques',
+      rating: p.rating || null,
+      ratingCount: p.userRatingCount || 0,
+      openNow: p.currentOpeningHours?.openNow,
+      lat: p.location.latitude,
+      lon: p.location.longitude,
+      distance: Math.round(haversineMeters(lat, lon, p.location.latitude, p.location.longitude))
+    })).sort((a,b) => a.distance - b.distance);
+
+    bumpUsage('usage_places_calls');
+
+    if(toilets.length === 0){
+      list.innerHTML = '<div class="flap-empty" style="padding:0 20px;">Aucune toilette publique référencée dans un rayon de 1 km.</div>';
+      return;
+    }
+
+    list.innerHTML = toilets.map(t => `
+      <div class="place-card" onclick="openPlaceDetail('${t.id}', ${t.lat}, ${t.lon}, '${t.name.replace(/'/g, "\\'")}')" style="cursor:pointer;">
+        <div class="place-thumb" style="background:var(--lake-dim);">🚻</div>
+        <div class="place-info">
+          <div class="place-name">${t.name}</div>
+          <div class="place-meta">
+            ${t.rating ? `<span class="rating">★ ${t.rating}</span><span class="dot-sep"></span><span class="meta-txt">${t.ratingCount} avis</span>` : '<span class="meta-txt">Pas encore noté</span>'}
+            ${t.openNow === true ? '<span class="dot-sep"></span><span class="meta-txt" style="color:var(--lake);">Ouvert</span>' : ''}
+            ${t.openNow === false ? '<span class="dot-sep"></span><span class="meta-txt" style="color:var(--coral);">Fermé</span>' : ''}
+          </div>
+          <div class="meta-txt" style="margin-top:3px;">${t.distance} m · toucher pour en savoir plus</div>
+        </div>
+      </div>
+    `).join('');
+  } catch(e){
+    list.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Impossible de charger les toilettes : ${e.message || e}.</div>`;
   }
 }
 
