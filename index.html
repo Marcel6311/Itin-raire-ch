@@ -864,6 +864,7 @@ function showPassList(idx){
   if(passList.length === 0){
     body.innerHTML = `
       <h2 class="app-title" style="font-size:18px; margin-bottom:8px;">${j.category || ''} ${lineNum} → ${j.to || ''}</h2>
+      <button onclick="saveJourneyLegToCalendar(${idx})" class="btn-secondary" style="width:100%; margin-bottom:10px;">📅 Ajouter au calendrier</button>
       <p class="meta-txt">La liste des arrêts intermédiaires n'est pas fournie pour ce passage précis (certaines lignes de bus locales ne la transmettent pas).</p>
     `;
     return;
@@ -880,8 +881,75 @@ function showPassList(idx){
 
   body.innerHTML = `
     <h2 class="app-title" style="font-size:18px; margin-bottom:10px;">${j.category || ''} ${lineNum} → ${j.to || ''}</h2>
+    <button onclick="saveJourneyLegToCalendar(${idx})" class="btn-secondary" style="width:100%; margin-bottom:10px;">📅 Ajouter au calendrier</button>
     <div style="max-height:60vh; overflow-y:auto;">${stopsHtml}</div>
   `;
+}
+
+// Échappe le texte pour un champ ICS (DESCRIPTION, SUMMARY) — antislash, virgule,
+// point-virgule et retours à la ligne ont un sens spécial dans le format .ics
+function icsEscape(text){
+  return String(text || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\n/g, '\\n');
+}
+
+// Ajoute au calendrier UN SEUL trajet (bus, train ou bateau) tel qu'affiché dans le tableau —
+// pas besoin de gérer les correspondances comme pour un trajet complet planifié.
+function saveJourneyLegToCalendar(idx){
+  const j = journeyCache[idx];
+  if(!j){ showToast("Trajet introuvable."); return; }
+
+  const lineNum = j.number || j.category || '';
+  const passList = j.passList || [];
+  const start = j.stop.departure;
+  if(!start){ showToast("Heure de départ inconnue pour ce trajet, impossible de l'ajouter."); return; }
+
+  let end;
+  if(passList.length > 0){
+    const last = passList[passList.length - 1];
+    end = last.arrival || last.departure || null;
+  }
+  if(!end){
+    // Pas d'arrêts intermédiaires fournis pour ce passage — on estime une durée par défaut
+    // de 20 minutes plutôt que de ne rien proposer.
+    end = new Date(new Date(start).getTime() + 20 * 60000).toISOString();
+  }
+
+  const summary = `${j.category || ''} ${lineNum} → ${j.to || ''}`.trim();
+  const descriptionLines = passList.map(p => {
+    const t = p.departure ? fmtTime(p.departure) : (p.arrival ? fmtTime(p.arrival) : '');
+    return `${t} — ${p.station?.name || ''}`;
+  });
+  const description = descriptionLines.length > 0
+    ? 'Arrêts : ' + descriptionLines.join(', ')
+    : "Arrêts intermédiaires non fournis pour ce passage.";
+
+  const ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//itineraire-ch//FR',
+    'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    `UID:${Date.now()}-leg@itineraire-ch.github.io`,
+    `DTSTAMP:${icsDate(new Date().toISOString())}`,
+    `DTSTART:${icsDate(start)}`,
+    `DTEND:${icsDate(end)}`,
+    `SUMMARY:${icsEscape(summary)}`,
+    `DESCRIPTION:${icsEscape(description)}`,
+    'BEGIN:VALARM',
+    'TRIGGER:-PT5M',
+    'ACTION:DISPLAY',
+    `DESCRIPTION:${icsEscape('Départ de ' + summary + ' dans 5 minutes')}`,
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].join('\r\n');
+
+  downloadBlob(ics, 'text/calendar', 'trajet.ics');
+  showToast("Trajet ajouté au calendrier, avec une alarme 5 min avant le départ.", 4000);
 }
 
 async function renderStationGroup(station){
