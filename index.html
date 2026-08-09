@@ -3145,14 +3145,10 @@ function closePassengerMode(){
 
 function renderPassengerMode(userPos){
   const body = document.getElementById('place-detail-body');
-  const now = new Date();
 
-  // Avance automatiquement à l'étape suivante dès que l'heure prévue de la précédente est
-  // dépassée — pas de recalcul d'itinéraire, on suit simplement l'horaire déjà planifié.
-  let current = currentTripWaypoints[currentTripWaypoints.length - 1];
-  for(const wp of currentTripWaypoints){
-    if(!wp.time || new Date(wp.time) > now){ current = wp; break; }
-  }
+  // En voiture, le conducteur va directement à la destination finale — pas d'intérêt à suivre
+  // les arrêts de bus intermédiaires. Toujours la dernière étape du trajet planifié.
+  const current = currentTripWaypoints[currentTripWaypoints.length - 1];
 
   let distanceHtml = '';
   let wazeUrl = '';
