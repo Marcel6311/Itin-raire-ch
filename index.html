@@ -3231,8 +3231,8 @@ function showTripDetail(idx){
     currentTripWaypoints.push({
       label: `Marchez jusqu'à ${selectedPlaceWalk.placeName}`,
       time: null,
-      lat: selectedPlaceWalk.stops[0].coordinate?.x,
-      lon: selectedPlaceWalk.stops[0].coordinate?.y
+      lat: selectedPlaceWalk.coordinate?.x,
+      lon: selectedPlaceWalk.coordinate?.y
     });
   }
 
