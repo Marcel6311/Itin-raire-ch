@@ -286,6 +286,7 @@
     <button class="maps-cta" id="maps-cta-btn">🗺️ Ouvrir l'itinéraire à pied dans Maps</button>
     <button class="maps-cta" id="restos-cta-btn" onclick="showScreen('around')" style="border-style:solid; background:var(--coral-dim); color:#9A3D22; font-weight:600;">🍽️ Voir les restaurants à la destination</button>
     <button class="maps-cta" id="calendar-cta-btn" style="border-style:solid; background:var(--lake-dim); color:#1B4C57; font-weight:600;">📅 Ajouter ce trajet au calendrier (alertes 5 min)</button>
+    <button class="maps-cta" onclick="openPassengerMode()" style="border-style:solid; background:#EDE7F6; color:#4527A0; font-weight:600;">🚗 Mode passager</button>
   </div>
 
   <div class="screen" id="screen-around">
@@ -428,6 +429,10 @@ let selectedDestination = null; // {id, name, coordinate}
 let selectedPlaceWalk = null;   // {placeName, coordinate, stops} — quand la destination est un lieu Google Places résolu vers un arrêt
 let selectedOrigin = null;      // {id, name} — si l'utilisateur choisit un départ précis, sinon on garde l'arrêt géolocalisé
 let currentConnections = [];
+let currentTripWaypoints = []; // pour le mode passager
+let passengerModeWatchId = null;
+let passengerModeTimerId = null;
+let lastPassengerModePos = null;
 let lastFromLabel = '', lastFromDistanceMeters = null, lastFromCoordinate = null; // mémorise le départ réellement utilisé lors de la recherche
 let lastAroundCoord = null, lastAroundLabel = ''; // destination de référence pour l'écran "Autour"
 let aroundPlaces = []; // résultats resto en cache pour retri sans nouvel appel réseau
@@ -2995,6 +3000,16 @@ async function openPlaceDetail(placeId, monLat, monLon, monName){
 }
 
 function closePlaceDetail(){
+  // Sécurité : si le mode passager tournait (GPS + minuteur), on l'arrête aussi ici,
+  // même si la fenêtre a été fermée autrement que par son propre bouton "Quitter".
+  if(passengerModeWatchId !== null){
+    navigator.geolocation.clearWatch(passengerModeWatchId);
+    passengerModeWatchId = null;
+  }
+  if(passengerModeTimerId !== null){
+    clearInterval(passengerModeTimerId);
+    passengerModeTimerId = null;
+  }
   document.getElementById('place-detail-modal').classList.remove('show');
 }
 
@@ -3086,6 +3101,84 @@ function saveTripToCalendar(c){
   showToast(`${journeySections.length + (selectedPlaceWalk ? 1 : 0)} étape(s) ajoutée(s), chacune avec une alarme 5 min avant.`, 4500);
 }
 
+// Mode passager : vue simplifiée en lecture seule d'un trajet déjà planifié, pensée pour
+// quand on se fait conduire en voiture — pas de saisie, pas de recalcul, juste la prochaine
+// étape et un bouton pour que le conducteur lance sa navigation Waze vers ce point précis.
+function openPassengerMode(){
+  if(currentTripWaypoints.length === 0){
+    showToast("Aucun trajet planifié à suivre — ouvre d'abord un trajet.");
+    return;
+  }
+  const modal = document.getElementById('place-detail-modal');
+  const body = document.getElementById('place-detail-body');
+  modal.classList.add('show');
+
+  if(passengerModeWatchId !== null) navigator.geolocation.clearWatch(passengerModeWatchId);
+  if(passengerModeTimerId !== null) clearInterval(passengerModeTimerId);
+  lastPassengerModePos = null;
+
+  renderPassengerMode(null);
+
+  if(navigator.geolocation){
+    passengerModeWatchId = navigator.geolocation.watchPosition(
+      (pos) => { lastPassengerModePos = { lat: pos.coords.latitude, lon: pos.coords.longitude }; renderPassengerMode(lastPassengerModePos); },
+      () => renderPassengerMode(null),
+      { enableHighAccuracy: true, maximumAge: 5000 }
+    );
+  }
+  // Fait avancer l'étape affichée toutes les 30 s même sans nouveau signal GPS (ex. voiture
+  // arrêtée à un feu), en se basant simplement sur l'heure qui passe.
+  passengerModeTimerId = setInterval(() => renderPassengerMode(lastPassengerModePos), 30000);
+}
+
+function closePassengerMode(){
+  if(passengerModeWatchId !== null){
+    navigator.geolocation.clearWatch(passengerModeWatchId);
+    passengerModeWatchId = null;
+  }
+  if(passengerModeTimerId !== null){
+    clearInterval(passengerModeTimerId);
+    passengerModeTimerId = null;
+  }
+  document.getElementById('place-detail-modal').classList.remove('show');
+}
+
+function renderPassengerMode(userPos){
+  const body = document.getElementById('place-detail-body');
+  const now = new Date();
+
+  // Avance automatiquement à l'étape suivante dès que l'heure prévue de la précédente est
+  // dépassée — pas de recalcul d'itinéraire, on suit simplement l'horaire déjà planifié.
+  let current = currentTripWaypoints[currentTripWaypoints.length - 1];
+  for(const wp of currentTripWaypoints){
+    if(!wp.time || new Date(wp.time) > now){ current = wp; break; }
+  }
+
+  let distanceHtml = '';
+  let wazeUrl = '';
+  if(current.lat && current.lon){
+    wazeUrl = `https://waze.com/ul?ll=${current.lat},${current.lon}&navigate=yes`;
+    if(userPos){
+      const dist = Math.round(haversineMeters(userPos.lat, userPos.lon, current.lat, current.lon));
+      distanceHtml = `<p class="meta-txt" style="font-size:15px; margin:10px 0;">📍 ≈ ${dist >= 1000 ? (dist/1000).toFixed(1)+' km' : dist+' m'} à vol d'oiseau</p>`;
+    } else {
+      distanceHtml = `<p class="meta-txt" style="margin:10px 0;">Localisation en cours…</p>`;
+    }
+  }
+
+  body.innerHTML = `
+    <h2 class="app-title" style="font-size:19px; margin-bottom:4px;">🚗 Mode passager</h2>
+    <p class="meta-txt" style="margin-bottom:14px;">Vue simplifiée, lecture seule — suit l'horaire déjà planifié</p>
+    <div style="background:var(--paper-raised); border:1px solid var(--line); border-radius:12px; padding:16px; text-align:center;">
+      <p style="font-size:17px; font-weight:700; margin:0 0 6px;">${current.label}</p>
+      ${current.time ? `<p class="meta-txt">Prévu à ${fmtTime(current.time)}</p>` : ''}
+      ${distanceHtml}
+    </div>
+    ${wazeUrl ? `<a href="${wazeUrl}" target="_blank" rel="noopener noreferrer" class="btn-secondary" style="display:block; text-align:center; text-decoration:none; margin-top:14px; background:#33CCFF; color:#003C64; font-weight:700;">🚙 Ouvrir dans Waze</a>` : ''}
+    <button onclick="closePassengerMode()" class="btn-secondary" style="width:100%; margin-top:10px;">Quitter le mode passager</button>
+  `;
+}
+
 function showTripDetail(idx){
   const c = currentConnections[idx];
   showScreen('detail');
@@ -3116,6 +3209,33 @@ function showTripDetail(idx){
 
   const journeySections = (c.sections || []).filter(sec => sec.journey);
   const transferWalks = []; // {walkStepId, fromName, toName} — une par frontière entre deux lignes, résolue après coup
+
+  // Liste compacte des points de passage (heure, lieu, coordonnées), pour le mode passager —
+  // pas besoin de reconstruire le HTML détaillé, juste l'essentiel pour le suivi en direct.
+  currentTripWaypoints = [];
+  journeySections.forEach(sec => {
+    currentTripWaypoints.push({
+      label: `Montez : ${sec.journey.category}${sec.journey.number ? ' '+sec.journey.number : ''} — direction ${sec.journey.to || ''}`,
+      time: sec.departure.departure,
+      lat: sec.departure.station.coordinate?.x,
+      lon: sec.departure.station.coordinate?.y
+    });
+    currentTripWaypoints.push({
+      label: `Descendez à ${sec.arrival.station.name}`,
+      time: sec.arrival.arrival,
+      lat: sec.arrival.station.coordinate?.x,
+      lon: sec.arrival.station.coordinate?.y
+    });
+  });
+  if(selectedPlaceWalk){
+    currentTripWaypoints.push({
+      label: `Marchez jusqu'à ${selectedPlaceWalk.placeName}`,
+      time: null,
+      lat: selectedPlaceWalk.stops[0].coordinate?.x,
+      lon: selectedPlaceWalk.stops[0].coordinate?.y
+    });
+  }
+
   journeySections.forEach((sec, i) => {
     const mode = iconForCategory(sec.journey.category);
     const depDelay = computeDelayMin(sec.departure);
