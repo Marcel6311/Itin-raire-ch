@@ -1064,8 +1064,11 @@ async function renderStationGroup(station){
       // Boussole active : vraie flèche orientée vers l'arrêt, mise à jour en direct ailleurs.
       const bearing = bearingBetween(userCoords.lat, userCoords.lon, station.coordinate.x, station.coordinate.y);
       const rotation = (bearing - deviceHeading + 360) % 360;
-      trendDot = ` <span class="compass-arrow" data-bearing="${bearing}" style="display:inline-block; transform:rotate(${rotation}deg); margin-left:4px;" title="Direction de l'arrêt">➤</span>`;
-    } else {
+      if(!isNaN(bearing) && !isNaN(rotation)){
+        trendDot = ` <span class="compass-arrow" data-bearing="${bearing}" style="display:inline-block; color:#E4572E; font-size:14px; font-weight:900; transform:rotate(${rotation}deg); margin-left:4px;" title="Direction de l'arrêt">➤</span>`;
+      }
+    }
+    if(!trendDot){
       const prev = lastKnownDistances[station.id];
       if(typeof prev === 'number'){
         const deltaM = station.distance - prev;
