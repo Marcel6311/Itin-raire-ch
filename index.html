@@ -1072,7 +1072,7 @@ async function renderStationGroup(station){
       const bearing = bearingBetween(userCoords.lat, userCoords.lon, station.coordinate.x, station.coordinate.y);
       const rotation = (bearing - deviceHeading + 360) % 360;
       if(!isNaN(bearing) && !isNaN(rotation)){
-        trendDot = ` <span class="compass-arrow" data-bearing="${bearing}" style="display:inline-block; color:#E4572E; font-size:16px; font-weight:900; transform:rotate(${rotation}deg); margin-left:4px;" title="Direction de l'arrêt">▲</span> <span class="meta-txt compass-debug" data-bearing="${bearing}" style="font-size:9px; opacity:.7;">(cap arrêt:${Math.round(bearing)}° tél:${Math.round(deviceHeading)}°)</span>`;
+        trendDot = ` <span class="compass-arrow" data-bearing="${bearing}" style="display:inline-block; color:#E4572E; font-size:17px; font-weight:900; transform:rotate(${rotation}deg); margin-left:4px;" title="Direction de l'arrêt">↑</span> <span class="meta-txt compass-debug" data-bearing="${bearing}" style="font-size:9px; opacity:.7;">(cap arrêt:${Math.round(bearing)}° tél:${Math.round(deviceHeading)}°)</span>`;
       }
     }
     if(!trendDot){
