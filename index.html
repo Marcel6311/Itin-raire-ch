@@ -2333,10 +2333,12 @@ async function searchRestaurants(lat, lon, cuisineType){
         'X-Goog-FieldMask': 'places.id,places.displayName,places.rating,places.userRatingCount,places.priceLevel,places.currentOpeningHours.openNow,places.location'
       },
       body: JSON.stringify({
-        // Le filtre "Tous" inclut aussi cafés et brasseries : beaucoup d'établissements qui servent
-        // à manger (ex. Le Milan à Lausanne) sont classés "cafe" en type principal chez Google
-        // et échappaient au seul type "restaurant".
-        includedTypes: cuisineType === 'restaurant' ? ['restaurant', 'cafe'] : [cuisineType],
+        // Le filtre "Tous" combine les catégories génériques de nourriture/boisson (pas les
+        // cuisines par pays, qui ont déjà leur propre bouton dédié) — pour couvrir aussi les
+        // bars, boulangeries, snacks, etc. qui échappaient au seul "restaurant"/"cafe".
+        includedTypes: cuisineType === 'restaurant'
+          ? ['restaurant', 'cafe', 'bar', 'bakery', 'bar_and_grill', 'bistro', 'brewery', 'brewpub', 'cafeteria', 'deli', 'diner', 'fast_food_restaurant', 'food_court', 'pub', 'sandwich_shop', 'wine_bar', 'coffee_shop', 'meal_takeaway']
+          : [cuisineType],
         maxResultCount: 20,
         locationRestriction: { circle: { center: { latitude: lat, longitude: lon }, radius: 500.0 } }
       })
