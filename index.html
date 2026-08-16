@@ -205,7 +205,7 @@
       <input type="text" id="home-dest-filter" placeholder="🔍 Filtrer : n'afficher que les trajets passant par… (ex: Renens)" oninput="onHomeDestFilterChange()" autocomplete="off" autocorrect="off" spellcheck="false" style="width:100%; box-sizing:border-box; padding:9px 12px; border-radius:8px; border:1px solid var(--line); font-size:13.5px; background:var(--paper-raised);">
       <select id="home-dest-select" size="5" onchange="pickHomeDestFilter()" style="width:100%; box-sizing:border-box; margin-top:6px; border-radius:8px; border:1px solid var(--line); font-size:13.5px; background:var(--paper-raised); display:none;"></select>
     </div>
-    <div style="padding:0 20px 8px; display:flex; justify-content:flex-end;">
+    <div style="padding:0 20px 8px; display:flex; justify-content:flex-end; gap:8px;">
       <button onclick="openFairtiq()" style="background:#00A99D; color:#fff; border:none; border-radius:8px; padding:7px 14px; font-size:13px; font-weight:700; cursor:pointer;">🎫 Ouvrir FAIRTIQ</button>
     </div>
     <div class="flapboard" id="flapboard">
@@ -848,6 +848,58 @@ async function loadNearbyDepartures(){
 // Mémorise la dernière distance connue par arrêt, pour détecter si on s'en rapproche (vert)
 // ou si on s'en éloigne (rouge) entre deux actualisations.
 const lastKnownDistances = {};
+let deviceHeading = null; // cap actuel du téléphone (degrés, 0 = nord), null si boussole pas activée
+
+// Calcule le cap (en degrés, 0-360) entre deux points GPS — formule standard de navigation.
+function bearingBetween(lat1, lon1, lat2, lon2){
+  const toRad = d => d * Math.PI / 180;
+  const φ1 = toRad(lat1), φ2 = toRad(lat2), Δλ = toRad(lon2 - lon1);
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+// Met à jour la rotation de toutes les flèches affichées à l'écran, sans rien re-télécharger —
+// appelé à chaque événement de la boussole (potentiellement plusieurs fois par seconde).
+function updateAllCompassArrows(){
+  if(deviceHeading === null) return;
+  document.querySelectorAll('.compass-arrow[data-bearing]').forEach(el => {
+    const bearing = parseFloat(el.dataset.bearing);
+    const rotation = (bearing - deviceHeading + 360) % 360;
+    el.style.transform = `rotate(${rotation}deg)`;
+  });
+}
+
+function handleDeviceOrientation(event){
+  // iOS Safari fournit un cap boussole direct et fiable ; les autres navigateurs n'ont que
+  // "alpha", moins précis et dans le sens inverse — on fait au mieux selon ce qui est fourni.
+  const heading = (typeof event.webkitCompassHeading === 'number')
+    ? event.webkitCompassHeading
+    : (typeof event.alpha === 'number' ? (360 - event.alpha) % 360 : null);
+  if(heading === null) return;
+  deviceHeading = heading;
+  updateAllCompassArrows();
+}
+
+async function requestCompassPermission(){
+  try{
+    // iOS 13+ exige que cette permission soit demandée depuis un vrai geste de l'utilisateur
+    // (un simple appui sur un bouton) — impossible de la demander automatiquement au chargement.
+    if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
+      const result = await DeviceOrientationEvent.requestPermission();
+      if(result !== 'granted'){
+        showToast("Permission boussole refusée — les flèches resteront en mode point coloré simple.");
+        return;
+      }
+    }
+    window.addEventListener('deviceorientation', handleDeviceOrientation);
+    showToast("Boussole activée — les flèches pointent maintenant vers chaque arrêt.");
+    const btn = document.getElementById('compass-btn');
+    if(btn) btn.style.display = 'none';
+  } catch(e){
+    showToast("Boussole non disponible sur cet appareil/navigateur.");
+  }
+}
 
 // Cache des trajets affichés, pour retrouver le bon "passList" (arrêts intermédiaires) au clic
 let journeyCache = [];
