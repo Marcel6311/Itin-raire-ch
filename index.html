@@ -878,6 +878,11 @@ function updateAllCompassArrows(){
   });
 }
 
+// Décalage de calibration mesuré manuellement par Marcel (écart constant observé entre le cap
+// affiché et le vrai nord, comparé à l'appli Boussole native — cause exacte non identifiable
+// à distance, mais ce correctif fixe compense le résultat final).
+const COMPASS_CALIBRATION_OFFSET = 60;
+
 function handleDeviceOrientation(event){
   // iOS Safari fournit un cap boussole direct et fiable ; les autres navigateurs n'ont que
   // "alpha", moins précis et dans le sens inverse — on fait au mieux selon ce qui est fourni.
@@ -885,7 +890,7 @@ function handleDeviceOrientation(event){
     ? event.webkitCompassHeading
     : (typeof event.alpha === 'number' ? (360 - event.alpha) % 360 : null);
   if(heading === null) return;
-  deviceHeading = heading;
+  deviceHeading = (heading - COMPASS_CALIBRATION_OFFSET + 360) % 360;
   updateAllCompassArrows();
 }
 
