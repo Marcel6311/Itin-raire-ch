@@ -333,6 +333,10 @@
       <div class="chip active" id="gare-time-label" onclick="resetGareTime()">🕐 Maintenant</div>
       <div class="chip" onclick="shiftGareTime(5)">+ 5 min</div>
     </div>
+    <div class="sort-row" style="padding:8px 20px 4px;">
+      <div class="chip active" id="gare-mode-trains" onclick="setGareMode('trains')">🚆 Trains seulement</div>
+      <div class="chip" id="gare-mode-all" onclick="setGareMode('all')">🚏 Tous les modes</div>
+    </div>
     <div class="card" style="position:relative;">
       <div class="field">
         <div class="dot dot-from"></div>
@@ -340,7 +344,7 @@
         <div class="autocomplete" id="autocomplete-station"></div>
       </div>
     </div>
-    <p class="value-note" style="margin:0 20px 10px;">Tapez le nom d'une ville (pas "gare" en plus — juste le nom, ex. "Lausanne"), sélectionnez-la dans la liste. Tableau des départs (trains uniquement), actualisé automatiquement toutes les 45 s. Il n'existe pas de tableau des arrivées séparé dans les données suisses officielles — comme sur les vrais écrans de gare, ce sont les départs qui comptent pour savoir où aller.</p>
+    <p class="value-note" style="margin:0 20px 10px;" id="gare-mode-note">Tapez le nom d'une ville (pas "gare" en plus — juste le nom, ex. "Lausanne"), sélectionnez-la dans la liste. Tableau des départs (trains uniquement), actualisé automatiquement toutes les 45 s. Il n'existe pas de tableau des arrivées séparé dans les données suisses officielles — comme sur les vrais écrans de gare, ce sont les départs qui comptent pour savoir où aller.</p>
     <div style="padding:0 20px 8px;">
       <input type="text" id="gare-dest-filter" placeholder="🔍 Filtrer : n'afficher que les trains passant par… (ex: Renens)" oninput="onGareDestFilterChange()" autocomplete="off" autocorrect="off" spellcheck="false" style="width:100%; box-sizing:border-box; padding:9px 12px; border-radius:8px; border:1px solid var(--line); font-size:13.5px; background:var(--paper-raised);">
       <select id="gare-dest-select" size="5" onchange="pickGareDestFilter()" style="width:100%; box-sizing:border-box; margin-top:6px; border-radius:8px; border:1px solid var(--line); font-size:13.5px; background:var(--paper-raised); display:none;"></select>
@@ -1353,17 +1357,19 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
 
       if(kind === 'stationboard'){
         const board = document.getElementById('station-board');
-        board.insertAdjacentHTML('afterbegin', `<div class="flap-loading" id="checking-${s.id}" style="padding:0 20px 10px;">Vérification de "${s.name}" (id: ${s.id})…</div>`);
-        const diag = await checkStationDiagnostic(s.id);
-        document.getElementById('checking-' + s.id)?.remove();
-        if(!diag.hasTrain){
-          const detail = diag.error
-            ? `Erreur réseau : ${diag.error}`
-            : diag.count === 0
-              ? `0 passage renvoyé par l'API pour cet identifiant (${s.id}).`
-              : `${diag.count} passages trouvés, mais aucun train — catégories reçues : ${[...new Set(diag.cats)].join(', ')}`;
-          showToast(`"${s.name}" — ${detail}`, 8000);
-          return;
+        if(gareMode === 'trains'){
+          board.insertAdjacentHTML('afterbegin', `<div class="flap-loading" id="checking-${s.id}" style="padding:0 20px 10px;">Vérification de "${s.name}" (id: ${s.id})…</div>`);
+          const diag = await checkStationDiagnostic(s.id);
+          document.getElementById('checking-' + s.id)?.remove();
+          if(!diag.hasTrain){
+            const detail = diag.error
+              ? `Erreur réseau : ${diag.error}`
+              : diag.count === 0
+                ? `0 passage renvoyé par l'API pour cet identifiant (${s.id}).`
+                : `${diag.count} passages trouvés, mais aucun train — catégories reçues : ${[...new Set(diag.cats)].join(', ')}`;
+            showToast(`"${s.name}" — ${detail}`, 8000);
+            return;
+          }
         }
         if(!verifiedGares.some(g => g.id === s.id)){
           verifiedGares = [{ id: s.id, name: s.name, distance: null, coordinate: s.coordinate }];
@@ -1678,6 +1684,19 @@ function getFreshPosition(){
 // Décalage temporel du tableau de gare (en minutes) — permet de consulter un horaire futur réel,
 // pas simulé, via le paramètre "datetime" officiel de l'API.
 let gareTimeOffsetMin = 0;
+// 'trains' (par défaut, comme un vrai écran de gare CFF) ou 'all' (tous les modes — bus, tram,
+// bateau compris — utile pour un arrêt comme "Lausanne, Chauderon" qui n'a aucun train).
+let gareMode = 'trains';
+function setGareMode(mode){
+  gareMode = mode;
+  document.getElementById('gare-mode-trains').classList.toggle('active', mode === 'trains');
+  document.getElementById('gare-mode-all').classList.toggle('active', mode === 'all');
+  document.getElementById('gare-mode-note').textContent = mode === 'trains'
+    ? "Tapez le nom d'une ville (pas \"gare\" en plus — juste le nom, ex. \"Lausanne\"), sélectionnez-la dans la liste. Tableau des départs (trains uniquement), actualisé automatiquement toutes les 45 s."
+    : "Tapez le nom de n'importe quel arrêt (ex. \"Lausanne, Chauderon\"), sélectionnez-le dans la liste. Tableau des départs TOUS MODES (bus, tram, train, bateau), actualisé automatiquement toutes les 45 s.";
+  // Redessine ce qui est déjà affiché avec le nouveau filtre, sans tout recharger.
+  if(typeof refreshGareBoardsNow === 'function') refreshGareBoardsNow();
+}
 
 function formatOffsetDatetime(offsetMin){
   const d = new Date(Date.now() + offsetMin * 60000);
@@ -1992,7 +2011,7 @@ async function refreshOneStationBoard(id, name, distance, coordinate){
     const res = await fetchWithTimeout(`${API}/stationboard?id=${id}&limit=25${dtParam}`, 6000);
     const data = await res.json();
     const trains = (data.stationboard || [])
-      .filter(j => TRAIN_CATEGORIES.includes((j.category || '').toUpperCase()))
+      .filter(j => gareMode === 'all' || TRAIN_CATEGORIES.includes((j.category || '').toUpperCase()))
       .filter(journeyMatchesGareFilter);
     const distTxt = distance ? ` · ${Math.round(distance)} m` : '';
 
