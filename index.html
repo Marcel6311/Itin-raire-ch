@@ -205,6 +205,11 @@
       <input type="text" id="home-dest-filter" placeholder="🔍 Filtrer : n'afficher que les trajets passant par… (ex: Renens)" oninput="onHomeDestFilterChange()" autocomplete="off" autocorrect="off" spellcheck="false" style="width:100%; box-sizing:border-box; padding:9px 12px; border-radius:8px; border:1px solid var(--line); font-size:13.5px; background:var(--paper-raised);">
       <select id="home-dest-select" size="5" onchange="pickHomeDestFilter()" style="width:100%; box-sizing:border-box; margin-top:6px; border-radius:8px; border:1px solid var(--line); font-size:13.5px; background:var(--paper-raised); display:none;"></select>
     </div>
+    <div style="padding:0 20px 8px;">
+      <input type="text" id="input-anystop" placeholder="🚏 Voir le tableau d'un autre arrêt, ex: Lausanne Chauderon" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%; box-sizing:border-box; padding:9px 12px; border-radius:8px; border:1px solid var(--line); font-size:13.5px; background:var(--paper-raised);">
+      <div class="autocomplete" id="autocomplete-anystop"></div>
+    </div>
+    <div id="anystop-board" style="margin:0 20px 12px;"></div>
     <div style="padding:0 20px 8px; display:flex; justify-content:flex-end; gap:8px;">
       <button id="compass-btn" onclick="requestCompassPermission()" style="background:#5B4B8A; color:#fff; border:none; border-radius:8px; padding:7px 14px; font-size:13px; font-weight:700; cursor:pointer;">🧭 Activer la boussole</button>
       <button onclick="openFairtiq()" style="background:#00A99D; color:#fff; border:none; border-radius:8px; padding:7px 14px; font-size:13px; font-weight:700; cursor:pointer;">🎫 Ouvrir FAIRTIQ</button>
@@ -1172,6 +1177,7 @@ function useCurrentLocation(){
 document.addEventListener('DOMContentLoaded', () => {
   setupAutocomplete('input-from', 'autocomplete-from', 'origin');
   setupAutocomplete('input-to', 'autocomplete-to', 'destination');
+  setupAutocomplete('input-anystop', 'autocomplete-anystop', 'anystop');
   document.getElementById('input-to-city').addEventListener('input', () => {
     const street = document.getElementById('input-to').value.trim();
     const city = document.getElementById('input-to-city').value.trim();
@@ -1372,6 +1378,18 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
           refreshOneStationBoard(s.id, s.name, null, s.coordinate);
         }
         document.getElementById(inputId).value = '';
+        return;
+      }
+
+      // Recherche d'un arrêt quelconque sur l'écran d'accueil (tous modes, sans filtre, sans
+      // vérification de train) — affiche directement son tableau complet, comme demandé.
+      if(kind === 'anystop'){
+        const board = document.getElementById('anystop-board');
+        board.innerHTML = `<div class="flap-loading">Chargement du tableau de "${s.name}"…</div>`;
+        const result = await renderStationGroup({ id: s.id, name: s.name, distance: null, coordinate: s.coordinate });
+        board.innerHTML = result.html;
+        document.getElementById(inputId).value = '';
+        document.getElementById(boxId).classList.remove('show');
         return;
       }
 
