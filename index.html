@@ -205,8 +205,9 @@
       <input type="text" id="home-dest-filter" placeholder="🔍 Filtrer : n'afficher que les trajets passant par… (ex: Renens)" oninput="onHomeDestFilterChange()" autocomplete="off" autocorrect="off" spellcheck="false" style="width:100%; box-sizing:border-box; padding:9px 12px; border-radius:8px; border:1px solid var(--line); font-size:13.5px; background:var(--paper-raised);">
       <select id="home-dest-select" size="5" onchange="pickHomeDestFilter()" style="width:100%; box-sizing:border-box; margin-top:6px; border-radius:8px; border:1px solid var(--line); font-size:13.5px; background:var(--paper-raised); display:none;"></select>
     </div>
-    <div style="padding:0 20px 8px;">
-      <input type="text" id="input-anystop" placeholder="🚏 Voir le tableau d'un autre arrêt, ex: Lausanne Chauderon" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%; box-sizing:border-box; padding:9px 12px; border-radius:8px; border:1px solid var(--line); font-size:13.5px; background:var(--paper-raised);">
+    <div style="margin:14px 20px 8px; padding-top:10px; border-top:2px solid var(--line);">
+      <p class="section-label" style="margin:0 0 6px;">🚏 Consulter un AUTRE arrêt (pas le tien)</p>
+      <input type="text" id="input-anystop" placeholder="Nom de l'arrêt, ex: Lausanne Chauderon" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%; box-sizing:border-box; padding:9px 12px; border-radius:8px; border:1px solid var(--line); font-size:13.5px; background:var(--paper-raised);">
       <div class="autocomplete" id="autocomplete-anystop"></div>
     </div>
     <div id="anystop-board" style="margin:0 20px 12px;"></div>
@@ -1381,8 +1382,6 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
         return;
       }
 
-      // Recherche d'un arrêt quelconque sur l'écran d'accueil (tous modes, sans filtre, sans
-      // vérification de train) — affiche directement son tableau complet, comme demandé.
       if(kind === 'anystop'){
         const board = document.getElementById('anystop-board');
         board.innerHTML = `<div class="flap-loading">Chargement du tableau de "${s.name}"…</div>`;
