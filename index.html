@@ -210,7 +210,7 @@
       <input type="text" id="input-anystop" placeholder="Nom de l'arrêt, ex: Lausanne Chauderon" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:100%; box-sizing:border-box; padding:9px 12px; border-radius:8px; border:1px solid var(--line); font-size:13.5px; background:var(--paper-raised);">
       <div class="autocomplete" id="autocomplete-anystop"></div>
     </div>
-    <div id="anystop-board" style="margin:0 20px 12px;"></div>
+    <div id="anystop-board" class="flapboard" style="display:none;"></div>
     <div style="padding:0 20px 8px; display:flex; justify-content:flex-end; gap:8px;">
       <button id="compass-btn" onclick="requestCompassPermission()" style="background:#5B4B8A; color:#fff; border:none; border-radius:8px; padding:7px 14px; font-size:13px; font-weight:700; cursor:pointer;">🧭 Activer la boussole</button>
       <button onclick="openFairtiq()" style="background:#00A99D; color:#fff; border:none; border-radius:8px; padding:7px 14px; font-size:13px; font-weight:700; cursor:pointer;">🎫 Ouvrir FAIRTIQ</button>
@@ -1384,6 +1384,7 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
 
       if(kind === 'anystop'){
         const board = document.getElementById('anystop-board');
+        board.style.display = 'block';
         board.innerHTML = `<div class="flap-loading">Chargement du tableau de "${s.name}"…</div>`;
         const result = await renderStationGroup({ id: s.id, name: s.name, distance: null, coordinate: s.coordinate });
         board.innerHTML = result.html;
