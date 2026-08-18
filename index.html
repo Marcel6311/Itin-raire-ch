@@ -1175,6 +1175,12 @@ function useCurrentLocation(){
 }
 
 // ---------- Autocomplétion (départ + destination) ----------
+function closeAnystopBoard(){
+  const board = document.getElementById('anystop-board');
+  board.innerHTML = '';
+  board.style.display = 'none';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   setupAutocomplete('input-from', 'autocomplete-from', 'origin');
   setupAutocomplete('input-to', 'autocomplete-to', 'destination');
@@ -1387,7 +1393,7 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
         board.style.display = 'block';
         board.innerHTML = `<div class="flap-loading">Chargement du tableau de "${s.name}"…</div>`;
         const result = await renderStationGroup({ id: s.id, name: s.name, distance: null, coordinate: s.coordinate });
-        board.innerHTML = result.html;
+        board.innerHTML = `<div style="text-align:right; margin-bottom:8px;"><span onclick="closeAnystopBoard()" style="cursor:pointer; color:#fff; opacity:.7; font-size:13px;">✕ Fermer ce tableau</span></div>` + result.html;
         document.getElementById(inputId).value = '';
         document.getElementById(boxId).classList.remove('show');
         return;
