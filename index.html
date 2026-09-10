@@ -848,7 +848,7 @@ async function loadNearbyDepartures(){
 
     board.innerHTML = '<div class="flap-header"><span>' + nearbyStations.length + ' arrêt(s) à proximité</span><span>Temps réel</span></div>' + summaryHtml + groupsHtml;
   } catch(e){
-    board.innerHTML = '<div class="flap-header"><span>Arrêts à proximité</span><span>—</span></div><div class="flap-empty">Erreur réseau — tirez pour rafraîchir.</div>';
+    board.innerHTML = '<div class="flap-header"><span>Arrêts à proximité</span><span>—</span></div><div class="flap-empty">Erreur : ' + (e.message || e) + '</div>';
   }
 }
 
@@ -1159,7 +1159,7 @@ async function renderStationGroup(station){
         return `<div class="flap-direction-block${isGrey ? ' flap-direction-grey' : ''}"><div class="flap-direction-label">${label}</div>${rows}</div>`;
       }).join('');
     }
-  } catch(e){ bodyHtml = '<div class="flap-empty">Erreur de chargement.</div>'; }
+  } catch(e){ bodyHtml = '<div class="flap-empty">Erreur : ' + (e.message || e) + '</div>'; }
 
   const earliest = board.length > 0 ? { j: board[0], station } : null;
   return {
