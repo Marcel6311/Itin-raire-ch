@@ -477,7 +477,7 @@ function updateUsageLabel(){
   if(el) el.textContent = `📊 ${maps} carte(s) · ${places} recherche(s) de lieux (indicatif, depuis l'installation)`;
 }
 function showUsageDetail(){
-  showToast("Ce compteur est purement local et approximatif. Pour les vrais chiffres et un contrôle fiable, consulte Google Cloud Console → APIs & Services → Tableau de bord (ou configure une alerte de budget).", 6000);
+  showToast("Ce compteur est purement local et approximatif. Pour les vrais chiffres et un contrôle fiable, consulte Google Cloud Console → APIs & Services → Tableau de bord (ou configure une alerte de budget).", 15000);
 }
 document.addEventListener('DOMContentLoaded', updateUsageLabel);
 
@@ -801,7 +801,7 @@ async function loadNearbyDepartures(){
   const board = document.getElementById('flapboard');
   board.innerHTML = '<div class="flap-header"><span>Arrêts à proximité</span><span>Temps réel</span></div><div class="flap-loading">Recherche des arrêts proches…</div>';
   try{
-    const res = await fetchWithTimeout(`${API}/locations?x=${userCoords.lat}&y=${userCoords.lon}&type=station`, 6000);
+    const res = await fetchWithTimeout(`${API}/locations?x=${userCoords.lat}&y=${userCoords.lon}&type=station`, 15000);
     const data = await res.json();
     nearbyStations = (data.stations || []).filter(s => s.id).slice(0, 2);
     if(nearbyStations.length === 0){
@@ -928,7 +928,7 @@ async function openLiveBoardForStep(id, name, category, number, departureTime){
   body.innerHTML = '<div class="flap-loading" style="padding:20px;">Chargement du trajet…</div>';
 
   try{
-    const res = await fetchWithTimeout(`${API}/stationboard?id=${id}&limit=30`, 6000);
+    const res = await fetchWithTimeout(`${API}/stationboard?id=${id}&limit=30`, 15000);
     const data = await res.json();
     const allBoard = data.stationboard || [];
     const matches = allBoard.filter(j => (j.category || '') === category && String(j.number || '') === String(number));
@@ -1100,7 +1100,7 @@ async function renderStationGroup(station){
     // On récupère large (20), puis on regroupe PAR QUAI quand l'info existe (vue d'ensemble de la
     // place en un coup d'œil), sinon par direction — plutôt que de tout mélanger trié par heure.
     const dtParam = homeTimeOffsetMin !== 0 ? `&datetime=${encodeURIComponent(formatOffsetDatetime(homeTimeOffsetMin))}` : '';
-    const res = await fetchWithTimeout(`${API}/stationboard?id=${station.id}&limit=20${dtParam}`, 6000);
+    const res = await fetchWithTimeout(`${API}/stationboard?id=${station.id}&limit=20${dtParam}`, 15000);
     const data = await res.json();
     board = (data.stationboard || []).sort((a, b) => actualDepartureTime(a) - actualDepartureTime(b));
     board = board.filter(journeyMatchesFilter);
@@ -1800,7 +1800,7 @@ async function loadBoatScreen(forceRefresh){
   board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Identification de la ville (${freshCoords.lat.toFixed(4)}, ${freshCoords.lon.toFixed(4)})…</div>`;
   let cityName = null;
   try{
-    const geoRes = await fetchWithTimeout(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${freshCoords.lat}&lon=${freshCoords.lon}&zoom=12&addressdetails=1&accept-language=fr`, 6000);
+    const geoRes = await fetchWithTimeout(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${freshCoords.lat}&lon=${freshCoords.lon}&zoom=12&addressdetails=1&accept-language=fr`, 15000);
     if(!geoRes.ok){
       board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Échec — HTTP ${geoRes.status} depuis OpenStreetMap. Tapez un débarcadère manuellement ci-dessus.</div>`;
       return;
@@ -1879,7 +1879,7 @@ async function loadStationScreen(forceRefresh){
     board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Étape 2/3 — Identification de la ville (${freshCoords.lat.toFixed(4)}, ${freshCoords.lon.toFixed(4)})…</div>`;
     let cityName = null;
     try{
-      const geoRes = await fetchWithTimeout(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${freshCoords.lat}&lon=${freshCoords.lon}&zoom=12&addressdetails=1&accept-language=fr`, 6000);
+      const geoRes = await fetchWithTimeout(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${freshCoords.lat}&lon=${freshCoords.lon}&zoom=12&addressdetails=1&accept-language=fr`, 15000);
       if(!geoRes.ok){
         board.innerHTML = `<div class="flap-empty" style="padding:0 20px;">Échec à l'étape 2 — HTTP ${geoRes.status} depuis OpenStreetMap.</div>`;
         return;
@@ -1899,7 +1899,7 @@ async function loadStationScreen(forceRefresh){
     // Étape 3 : nom de la ville → sa gare CFF, vérifiée
     board.innerHTML = `<div class="flap-loading" style="padding:0 20px;">Étape 3/3 — Ville identifiée : ${cityName}. Recherche de sa gare…</div>`;
     try{
-      const res = await fetchWithTimeout(`${API}/locations?query=${encodeURIComponent(cityName)}`, 6000);
+      const res = await fetchWithTimeout(`${API}/locations?query=${encodeURIComponent(cityName)}`, 15000);
       const data = await res.json();
       const candidates = (data.stations || []).filter(s => s.id);
       candidates.sort((a, b) => {
@@ -2013,7 +2013,7 @@ async function refreshOneStationBoard(id, name, distance, coordinate){
   if(!slot) return;
   try{
     const dtParam = gareTimeOffsetMin !== 0 ? `&datetime=${encodeURIComponent(formatOffsetDatetime(gareTimeOffsetMin))}` : '';
-    const res = await fetchWithTimeout(`${API}/stationboard?id=${id}&limit=25${dtParam}`, 6000);
+    const res = await fetchWithTimeout(`${API}/stationboard?id=${id}&limit=25${dtParam}`, 15000);
     const data = await res.json();
     const trains = (data.stationboard || [])
       .filter(j => TRAIN_CATEGORIES.includes((j.category || '').toUpperCase()))
@@ -2926,7 +2926,7 @@ async function openAttractionDetail(pageid){
   // récupérer ces infos pratiques si elles existent quelque part dans leur base.
   let googleInfoHtml = '';
   try{
-    const res = await fetchWithTimeout(`https://places.googleapis.com/v1/places:searchText`, 6000, {
+    const res = await fetchWithTimeout(`https://places.googleapis.com/v1/places:searchText`, 15000, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -3437,7 +3437,7 @@ function showTripDetail(idx){
     if(userCoords && destCoord && destCoord.x && destCoord.y){
       const straightDist = haversineMeters(userCoords.lat, userCoords.lon, destCoord.x, destCoord.y);
       if(straightDist > WALK_SANITY_LIMIT_M){
-        showToast(`Vous semblez encore loin (≈ ${(straightDist/1000).toFixed(1)} km à vol d'oiseau) — ce bouton est prévu pour le dernier tronçon à pied, une fois arrivé(e) à l'arrêt. Prenez d'abord votre transport, puis ouvrez ce lien sur place.`, 6000);
+        showToast(`Vous semblez encore loin (≈ ${(straightDist/1000).toFixed(1)} km à vol d'oiseau) — ce bouton est prévu pour le dernier tronçon à pied, une fois arrivé(e) à l'arrêt. Prenez d'abord votre transport, puis ouvrez ce lien sur place.`, 15000);
         return;
       }
     }
