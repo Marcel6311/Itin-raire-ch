@@ -1100,7 +1100,7 @@ async function renderStationGroup(station){
     // On récupère large (20), puis on regroupe PAR QUAI quand l'info existe (vue d'ensemble de la
     // place en un coup d'œil), sinon par direction — plutôt que de tout mélanger trié par heure.
     const dtParam = homeTimeOffsetMin !== 0 ? `&datetime=${encodeURIComponent(formatOffsetDatetime(homeTimeOffsetMin))}` : '';
-    const res = await fetchWithTimeout(`${API}/stationboard?id=${station.id}&limit=20${dtParam}`, 15000);
+    const res = await fetchWithTimeout(`${API}/stationboard?id=${station.id}&limit=80${dtParam}`, 15000);
     const data = await res.json();
     board = (data.stationboard || []).sort((a, b) => actualDepartureTime(a) - actualDepartureTime(b));
     board = board.filter(journeyMatchesFilter);
