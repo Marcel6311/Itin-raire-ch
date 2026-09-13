@@ -1389,12 +1389,97 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
         return;
       }
 
+// Certains carrefours (ex: Lausanne, Chauderon) sont en réalité deux arrêts physiques distincts
+// à quelques mètres l'un de l'autre, chacun avec ses propres lignes — on les regroupe
+// automatiquement en un seul tableau, pour éviter de n'avoir qu'une partie des lignes.
+async function renderMergedNearbyStops(clickedStation, perGroupLimit){
+  const baseName = clickedStation.name.split(',')[0].trim().toLowerCase();
+  let siblingStations = [clickedStation];
+
+  if(clickedStation.coordinate){
+    try{
+      const res = await fetchWithTimeout(`${API}/locations?x=${clickedStation.coordinate.x}&y=${clickedStation.coordinate.y}&type=station`, 15000);
+      const data = await res.json();
+      const nearby = (data.stations || []).filter(s => s.id);
+      for(const s of nearby){
+        if(s.id === clickedStation.id) continue;
+        const sBaseName = (s.name || '').split(',')[0].trim().toLowerCase();
+        const dist = (s.coordinate && clickedStation.coordinate)
+          ? haversineMeters(clickedStation.coordinate.x, clickedStation.coordinate.y, s.coordinate.x, s.coordinate.y)
+          : Infinity;
+        // Même nom de lieu principal (avant la virgule) et à moins de 300 m — très probablement
+        // le même carrefour, juste un quai/arrêt physique différent.
+        if(sBaseName === baseName && dist < 300){
+          siblingStations.push(s);
+        }
+      }
+    } catch(e){ /* Pas grave si la recherche des arrêts voisins échoue, on garde juste celui cliqué */ }
+  }
+
+  // Récupère et fusionne les tableaux de tous les arrêts trouvés, groupés ensemble par quai/ligne.
+  const boards = await Promise.all(siblingStations.map(async (st) => {
+    try{
+      const dtParam = homeTimeOffsetMin !== 0 ? `&datetime=${encodeURIComponent(formatOffsetDatetime(homeTimeOffsetMin))}` : '';
+      const res = await fetchWithTimeout(`${API}/stationboard?id=${st.id}&limit=150${dtParam}`, 15000);
+      const data = await res.json();
+      return data.stationboard || [];
+    } catch(e){ return []; }
+  }));
+  const merged = boards.flat().sort((a, b) => actualDepartureTime(a) - actualDepartureTime(b));
+
+  return renderMergedBoardHtml(merged, clickedStation, perGroupLimit || 20, siblingStations.length > 1);
+}
+
+function renderMergedBoardHtml(board, station, perGroupLimit, wasMerged){
+  board = board.filter(journeyMatchesFilter);
+  const groupByQuai = board.some(j => j.stop.platform);
+  const byGroup = new Map();
+  for(const j of board){
+    const key = groupByQuai ? (j.stop.platform ? 'Quai ' + j.stop.platform : 'Quai ?') : (j.to || '?');
+    if(!byGroup.has(key)) byGroup.set(key, []);
+    if(byGroup.get(key).length < perGroupLimit) byGroup.get(key).push(j);
+  }
+  const groups = [...byGroup.keys()].sort();
+  const mergedNote = wasMerged ? `<p class="meta-txt" style="margin-bottom:8px;">ℹ️ Fusionné avec un arrêt voisin de même nom (à moins de 300 m), pour avoir toutes les lignes.</p>` : '';
+
+  if(groups.length === 0){
+    return mergedNote + '<div class="flap-empty">Aucun départ imminent.</div>';
+  }
+  const bodyHtml = groups.map((groupKey, idx) => {
+    const isGrey = idx % 2 === 1;
+    const rows = byGroup.get(groupKey).map(j => {
+      const mode = iconForCategory(j.category);
+      const delay = computeDelayMin(j.stop);
+      const timeCls = delay > 0 ? 'flap-time delay' : 'flap-time';
+      const badge = delay > 0 ? `<span class="flap-badge badge-delay">+${delay}</span>` : `<span class="flap-badge badge-ontime">0</span>`;
+      const t = fmtTime(j.stop.departure);
+      const lineNum = j.number || j.category || '';
+      const minutesLeft = Math.max(0, Math.round((actualDepartureTime(j) - Date.now()) / 60000));
+      const countdownTxt = minutesLeft === 0 ? 'maintenant' : minutesLeft + ' min';
+      const journeyKey = journeyCache.length;
+      journeyCache.push(j);
+      return `<div class="flap-row" onclick="showPassList(${journeyKey})" style="cursor:pointer;">
+        ${badge}
+        <span class="${timeCls}">${t}</span>
+        <div class="flap-mode ${mode.cls}">${mode.icon}</div>
+        <span class="flap-line">${lineNum}</span>
+        <span class="flap-dest">${j.to || ''}</span>
+        <span class="flap-countdown">${countdownTxt}</span>
+      </div>`;
+    }).join('');
+    const label = groupByQuai ? groupKey : '→ ' + groupKey;
+    return `<div class="flap-direction-block${isGrey ? ' flap-direction-grey' : ''}"><div class="flap-direction-label">${label}</div>${rows}</div>`;
+  }).join('');
+
+  return `<div class="flap-header"><span>${station.name}</span><span>Temps réel</span></div>${mergedNote}${bodyHtml}`;
+}
+
       if(kind === 'anystop'){
         const board = document.getElementById('anystop-board');
         board.style.display = 'block';
-        board.innerHTML = `<div class="flap-loading">Chargement du tableau de "${s.name}"…</div>`;
-        const result = await renderStationGroup({ id: s.id, name: s.name, distance: null, coordinate: s.coordinate }, 20);
-        board.innerHTML = `<div style="text-align:right; margin-bottom:8px;"><span onclick="closeAnystopBoard()" style="cursor:pointer; color:#fff; opacity:.7; font-size:13px;">✕ Fermer ce tableau</span></div>` + result.html;
+        board.innerHTML = `<div class="flap-loading">Chargement du tableau de "${s.name}" (et recherche d'arrêts voisins similaires)…</div>`;
+        const html = await renderMergedNearbyStops({ id: s.id, name: s.name, coordinate: s.coordinate }, 20);
+        board.innerHTML = `<div style="text-align:right; margin-bottom:8px;"><span onclick="closeAnystopBoard()" style="cursor:pointer; color:#fff; opacity:.7; font-size:13px;">✕ Fermer ce tableau</span></div>` + html;
         document.getElementById(inputId).value = '';
         document.getElementById(boxId).classList.remove('show');
         return;
