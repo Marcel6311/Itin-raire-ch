@@ -808,7 +808,7 @@ async function loadNearbyDepartures(){
       board.innerHTML = '<div class="flap-header"><span>Arrêts à proximité</span><span>—</span></div><div class="flap-empty">Aucun arrêt trouvé à proximité.</div>';
       return;
     }
-    const results = await Promise.all(nearbyStations.map(s => renderStationGroup(s, Infinity)));
+    const results = await Promise.all(nearbyStations.map(s => renderStationGroup(s, 4)));
     const groupsHtml = results.map(r => r.html).join('');
 
     // Le tout premier départ, tous arrêts confondus — accessible immédiatement en haut du tableau.
