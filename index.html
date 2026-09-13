@@ -808,7 +808,7 @@ async function loadNearbyDepartures(){
       board.innerHTML = '<div class="flap-header"><span>Arrêts à proximité</span><span>—</span></div><div class="flap-empty">Aucun arrêt trouvé à proximité.</div>';
       return;
     }
-    const results = await Promise.all(nearbyStations.map(renderStationGroup));
+    const results = await Promise.all(nearbyStations.map(s => renderStationGroup(s, Infinity)));
     const groupsHtml = results.map(r => r.html).join('');
 
     // Le tout premier départ, tous arrêts confondus — accessible immédiatement en haut du tableau.
@@ -1098,10 +1098,11 @@ async function renderStationGroup(station, perGroupLimit){
   let directionSuffix = '';
   let board = [];
   try{
-    // On récupère large (20), puis on regroupe PAR QUAI quand l'info existe (vue d'ensemble de la
-    // place en un coup d'œil), sinon par direction — plutôt que de tout mélanger trié par heure.
+    // Plus de limite artificielle : on récupère toujours large pour être sûr de ne rater
+    // aucune ligne, même sur un gros carrefour comme Chauderon.
+    const fetchLimit = 150;
     const dtParam = homeTimeOffsetMin !== 0 ? `&datetime=${encodeURIComponent(formatOffsetDatetime(homeTimeOffsetMin))}` : '';
-    const res = await fetchWithTimeout(`${API}/stationboard?id=${station.id}&limit=150${dtParam}`, 15000);
+    const res = await fetchWithTimeout(`${API}/stationboard?id=${station.id}&limit=${fetchLimit}${dtParam}`, 15000);
     const data = await res.json();
     board = (data.stationboard || []).sort((a, b) => actualDepartureTime(a) - actualDepartureTime(b));
     board = board.filter(journeyMatchesFilter);
@@ -1393,7 +1394,14 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
 // à quelques mètres l'un de l'autre, chacun avec ses propres lignes — on les regroupe
 // automatiquement en un seul tableau, pour éviter de n'avoir qu'une partie des lignes.
 async function renderMergedNearbyStops(clickedStation, perGroupLimit){
-  const baseName = clickedStation.name.split(',')[0].trim().toLowerCase();
+  // Les arrêts suisses sont nommés "Ville, NomPrécis" (ex: "Lausanne, Chauderon") — c'est la
+  // partie APRÈS la virgule qui identifie vraiment le lieu, pas le nom de la ville (commun à
+  // des dizaines d'arrêts). S'il n'y a pas de virgule, on garde le nom complet tel quel.
+  const specificPart = (name) => {
+    const parts = (name || '').split(',');
+    return (parts.length > 1 ? parts[parts.length - 1] : parts[0]).trim().toLowerCase();
+  };
+  const baseName = specificPart(clickedStation.name);
   let siblingStations = [clickedStation];
 
   if(clickedStation.coordinate){
@@ -1403,12 +1411,12 @@ async function renderMergedNearbyStops(clickedStation, perGroupLimit){
       const nearby = (data.stations || []).filter(s => s.id);
       for(const s of nearby){
         if(s.id === clickedStation.id) continue;
-        const sBaseName = (s.name || '').split(',')[0].trim().toLowerCase();
+        const sBaseName = specificPart(s.name);
         const dist = (s.coordinate && clickedStation.coordinate)
           ? haversineMeters(clickedStation.coordinate.x, clickedStation.coordinate.y, s.coordinate.x, s.coordinate.y)
           : Infinity;
-        // Même nom de lieu principal (avant la virgule) et à moins de 300 m — très probablement
-        // le même carrefour, juste un quai/arrêt physique différent.
+        // Même nom précis (après la virgule) et à moins de 300 m — très probablement le même
+        // carrefour, juste un quai/arrêt physique différent.
         if(sBaseName === baseName && dist < 300){
           siblingStations.push(s);
         }
