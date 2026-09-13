@@ -1070,7 +1070,8 @@ function saveJourneyLegToCalendar(idx){
   showToast("Trajet ajouté au calendrier, avec une alarme 5 min avant le départ.", 4000);
 }
 
-async function renderStationGroup(station){
+async function renderStationGroup(station, perGroupLimit){
+  perGroupLimit = perGroupLimit || 3;
   let trendDot = '';
   if(station.distance){
     if(deviceHeading !== null && userCoords && station.coordinate){
@@ -1100,7 +1101,7 @@ async function renderStationGroup(station){
     // On récupère large (20), puis on regroupe PAR QUAI quand l'info existe (vue d'ensemble de la
     // place en un coup d'œil), sinon par direction — plutôt que de tout mélanger trié par heure.
     const dtParam = homeTimeOffsetMin !== 0 ? `&datetime=${encodeURIComponent(formatOffsetDatetime(homeTimeOffsetMin))}` : '';
-    const res = await fetchWithTimeout(`${API}/stationboard?id=${station.id}&limit=80${dtParam}`, 15000);
+    const res = await fetchWithTimeout(`${API}/stationboard?id=${station.id}&limit=150${dtParam}`, 15000);
     const data = await res.json();
     board = (data.stationboard || []).sort((a, b) => actualDepartureTime(a) - actualDepartureTime(b));
     board = board.filter(journeyMatchesFilter);
@@ -1110,7 +1111,7 @@ async function renderStationGroup(station){
     for(const j of board){
       const key = groupByQuai ? (j.stop.platform ? 'Quai ' + j.stop.platform : 'Quai ?') : (j.to || '?');
       if(!byGroup.has(key)) byGroup.set(key, []);
-      if(byGroup.get(key).length < 3) byGroup.get(key).push(j); // 3 prochains départs par groupe
+      if(byGroup.get(key).length < perGroupLimit) byGroup.get(key).push(j); // N prochains départs par groupe
     }
     // Trie les quais dans l'ordre alphabétique/numérique pour une lecture cohérente de la place
     const groups = [...byGroup.keys()].sort();
@@ -1392,7 +1393,7 @@ async function fetchAutocomplete(q, boxId, inputId, kind){
         const board = document.getElementById('anystop-board');
         board.style.display = 'block';
         board.innerHTML = `<div class="flap-loading">Chargement du tableau de "${s.name}"…</div>`;
-        const result = await renderStationGroup({ id: s.id, name: s.name, distance: null, coordinate: s.coordinate });
+        const result = await renderStationGroup({ id: s.id, name: s.name, distance: null, coordinate: s.coordinate }, 20);
         board.innerHTML = `<div style="text-align:right; margin-bottom:8px;"><span onclick="closeAnystopBoard()" style="cursor:pointer; color:#fff; opacity:.7; font-size:13px;">✕ Fermer ce tableau</span></div>` + result.html;
         document.getElementById(inputId).value = '';
         document.getElementById(boxId).classList.remove('show');
